@@ -189,7 +189,7 @@ export function Dashboard() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={tenureDist}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis dataKey="bucket" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="bin" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="count" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} name="Employees" />

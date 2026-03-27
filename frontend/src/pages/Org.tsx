@@ -16,8 +16,8 @@ import { ChartTooltip } from '../components/charts/ChartTooltip';
 interface OrgSummary {
   total_departments: number;
   total_business_units: number;
-  avg_dept_size: number;
-  max_dept_size: number;
+  avg_department_size: number;
+  max_department_size: number;
 }
 
 interface DeptSize {
@@ -106,7 +106,7 @@ export function Org() {
         />
         <KpiCard
           label="Avg Dept Size"
-          value={summary?.avg_dept_size ?? 0}
+          value={summary?.avg_department_size ?? 0}
           icon={<BarChart3 size={18} />}
           color="#a78bfa"
           loading={loading}
@@ -114,7 +114,7 @@ export function Org() {
         />
         <KpiCard
           label="Max Dept Size"
-          value={summary?.max_dept_size ?? 0}
+          value={summary?.max_department_size ?? 0}
           icon={<BarChart3 size={18} />}
           color="#34d399"
           loading={loading}

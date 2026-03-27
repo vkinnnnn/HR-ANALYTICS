@@ -62,10 +62,10 @@ export function Tenure() {
           api.get('/api/tenure/long-tenured'),
         ]);
         setSummary(sumRes.data);
-        setCohorts(cohortRes.data);
-        setDistribution(distRes.data);
-        setRetentionCurve(retRes.data);
-        setLongTenured(longRes.data);
+        setCohorts(cohortRes.data?.data || cohortRes.data || []);
+        setDistribution(distRes.data?.data || distRes.data || []);
+        setRetentionCurve(retRes.data?.data || retRes.data || []);
+        setLongTenured(longRes.data?.data || longRes.data || []);
       } catch (err) {
         console.error('Tenure load error', err);
       } finally {
@@ -110,7 +110,7 @@ export function Tenure() {
                   innerRadius={65}
                   outerRadius={105}
                   paddingAngle={2}
-                  dataKey="count"
+                  dataKey="total"
                   nameKey="cohort"
                   stroke="none"
                 >
@@ -140,7 +140,7 @@ export function Tenure() {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={distribution}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis dataKey="bucket" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="bin" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="count" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} name="Employees" />

@@ -14,9 +14,8 @@ import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 interface ManagerSummary {
   total_managers: number;
-  avg_span: number;
-  max_span: number;
-  revolving_door_count: number;
+  avg_span_of_control: number;
+  max_span_of_control: number;
 }
 
 interface SpanBucket {
@@ -47,6 +46,7 @@ export function Managers() {
   const [spanDist, setSpanDist] = useState<SpanBucket[]>([]);
   const [leaderboard, setLeaderboard] = useState<ManagerRow[]>([]);
   const [retention, setRetention] = useState<RetentionRow[]>([]);
+  const [revolvingDoorCount, setRevolvingDoorCount] = useState<number>(0);
 
   useEffect(() => {
     async function load() {
@@ -60,7 +60,9 @@ export function Managers() {
         setSummary(sumRes.data);
         setSpanDist(spanRes.data.buckets ?? spanRes.data ?? []);
         setLeaderboard(lbRes.data.managers ?? lbRes.data ?? []);
-        setRetention(retRes.data.managers ?? retRes.data ?? []);
+        const retentionData = retRes.data;
+        setRetention(retentionData.managers ?? retentionData ?? []);
+        setRevolvingDoorCount(retentionData?.revolving_door_count ?? 0);
       } catch (e) {
         console.error('Managers load error', e);
       } finally {
@@ -91,7 +93,7 @@ export function Managers() {
         />
         <KpiCard
           label="Avg Span of Control"
-          value={summary?.avg_span ?? 0}
+          value={summary?.avg_span_of_control ?? 0}
           icon={<Users size={18} />}
           color="#60a5fa"
           loading={loading}
@@ -99,7 +101,7 @@ export function Managers() {
         />
         <KpiCard
           label="Max Span"
-          value={summary?.max_span ?? 0}
+          value={summary?.max_span_of_control ?? 0}
           icon={<Maximize2 size={18} />}
           color="#a78bfa"
           loading={loading}
@@ -107,7 +109,7 @@ export function Managers() {
         />
         <KpiCard
           label="Revolving Door"
-          value={summary?.revolving_door_count ?? 0}
+          value={revolvingDoorCount}
           icon={<AlertOctagon size={18} />}
           color="#fb7185"
           loading={loading}

@@ -60,10 +60,10 @@ export function Turnover() {
           api.get('/api/turnover/danger-zones'),
         ]);
         setSummary(sumRes.data);
-        setTrend(trendRes.data);
-        setDeptTurnover(deptRes.data);
-        setTenureAtDep(tenureRes.data);
-        setDangerZones(dangerRes.data);
+        setTrend(trendRes.data?.data || trendRes.data || []);
+        setDeptTurnover(deptRes.data?.data || deptRes.data || []);
+        setTenureAtDep(tenureRes.data?.data || tenureRes.data || []);
+        setDangerZones(dangerRes.data?.data || dangerRes.data || []);
       } catch (err) {
         console.error('Turnover load error', err);
       } finally {

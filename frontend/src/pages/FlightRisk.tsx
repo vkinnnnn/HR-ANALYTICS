@@ -56,8 +56,8 @@ export function FlightRisk() {
         const riskData = riskRes.data;
         setSummary({
           total_active: riskData.total_active ?? riskData.total_scored ?? 0,
-          high_risk_count: riskData.high_risk_count ?? 0,
-          train_samples: riskData.train_samples ?? 0,
+          high_risk_count: riskData.employees?.filter((e: TopRiskEmployee) => e.risk_score >= 0.7).length || 0,
+          train_samples: riskData.model_info?.train_samples || 0,
         });
         setTopRisk(riskData.top_risk ?? riskData.employees ?? []);
         setFeatures(featRes.data.features ?? featRes.data ?? []);

@@ -13,10 +13,9 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 interface CareerSummary {
-  total_promotions: number;
+  total_promotions_detected: number;
   avg_promotion_velocity_days: number;
-  pct_with_title_changes: number;
-  stuck_count: number;
+  pct_employees_with_title_changes: number;
 }
 
 interface StuckEmployee {
@@ -78,7 +77,7 @@ export function Careers() {
       <div className="grid grid-cols-4 gap-4 mb-7">
         <KpiCard
           label="Total Promotions"
-          value={summary?.total_promotions ?? 0}
+          value={summary?.total_promotions_detected ?? 0}
           icon={<TrendingUp size={18} />}
           loading={loading}
           delay={0}
@@ -93,7 +92,7 @@ export function Careers() {
         />
         <KpiCard
           label="% With Title Changes"
-          value={summary?.pct_with_title_changes ?? 0}
+          value={summary?.pct_employees_with_title_changes ?? 0}
           format="percent"
           icon={<GitBranch size={18} />}
           color="#a78bfa"
@@ -102,7 +101,7 @@ export function Careers() {
         />
         <KpiCard
           label="Stuck Employees"
-          value={summary?.stuck_count ?? 0}
+          value={stuck.length}
           icon={<AlertCircle size={18} />}
           color="#fb7185"
           loading={loading}
