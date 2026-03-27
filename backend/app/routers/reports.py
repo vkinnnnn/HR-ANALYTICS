@@ -11,13 +11,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from ..data_loader import get_employees, get_history, is_loaded
-from ..llm import llm_call as _llm_call_unified, is_llm_available
+from ..llm import llm_call_premium as _llm_call_premium, is_llm_available
 
 router = APIRouter()
 
 
 async def _llm_call(system: str, user: str) -> str:
-    return await _llm_call_unified(system, user)
+    return await _llm_call_premium(system, user, temperature=0.3, max_tokens=2048)
 
 
 def _build_report_context() -> str:

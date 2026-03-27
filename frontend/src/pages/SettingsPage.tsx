@@ -13,6 +13,8 @@ interface LLMConfig {
   provider: string;
   model: string;
   has_key: boolean;
+  has_openai_key: boolean;
+  has_openrouter_key: boolean;
   is_available: boolean;
   available_models: { id: string; name: string; tier: string }[];
   available_providers: string[];
@@ -137,8 +139,17 @@ export function SettingsPage() {
                             {p === 'openrouter' ? 'OpenRouter' : 'OpenAI'}
                           </p>
                           <p style={{ fontSize: 11, color: '#52525b', marginTop: 2 }}>
-                            {p === 'openrouter' ? 'Free & paid models · 200+ models' : 'GPT-4o, GPT-4 Turbo · Paid'}
+                            {p === 'openrouter' ? 'Free & paid models · 200+ models' : 'GPT-4o, GPT-4.1, o3-mini · Paid'}
                           </p>
+                          <div className="flex items-center gap-1 mt-1">
+                            <span style={{
+                              width: 6, height: 6, borderRadius: '50%',
+                              background: (p === 'openrouter' ? llmConfig?.has_openrouter_key : llmConfig?.has_openai_key) ? '#34d399' : '#fb7185',
+                            }} />
+                            <span style={{ fontSize: 10, color: '#52525b' }}>
+                              {(p === 'openrouter' ? llmConfig?.has_openrouter_key : llmConfig?.has_openai_key) ? 'API key configured' : 'No API key'}
+                            </span>
+                          </div>
                         </div>
                         {selectedProvider === p && (
                           <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#FF8A4C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -232,6 +243,14 @@ export function SettingsPage() {
                     Model updated successfully
                   </span>
                 )}
+              </div>
+              <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', marginTop: 4 }}>
+                <p style={{ fontSize: 11, color: '#52525b', lineHeight: 1.5 }}>
+                  <strong style={{ color: '#71717a' }}>Chat</strong> uses the selected model above.{' '}
+                  <strong style={{ color: '#71717a' }}>Reports</strong> always use{' '}
+                  <span style={{ color: '#a78bfa', fontFamily: 'monospace', fontSize: 10 }}>GPT-4o</span>{' '}
+                  via OpenAI for premium quality{llmConfig?.has_openai_key ? '' : ' (key not set — will fallback to selected model)'}.
+                </p>
               </div>
             </div>
           )}

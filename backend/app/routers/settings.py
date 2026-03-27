@@ -11,23 +11,24 @@ from ..llm import is_llm_available
 
 router = APIRouter()
 
-# Available models for each provider
 AVAILABLE_MODELS = {
     "openrouter": [
-        {"id": "nvidia/nemotron-3-super-120b-a12b:free", "name": "Nvidia Nemotron 120B (Free)", "tier": "free"},
-        {"id": "meta-llama/llama-3.3-8b-instruct:free", "name": "Llama 3.3 8B (Free)", "tier": "free"},
-        {"id": "deepseek/deepseek-chat-v3-0324:free", "name": "DeepSeek V3 (Free)", "tier": "free"},
-        {"id": "google/gemini-2.0-flash-exp:free", "name": "Gemini 2.0 Flash (Free)", "tier": "free"},
-        {"id": "qwen/qwen3-235b-a22b:free", "name": "Qwen 3 235B (Free)", "tier": "free"},
+        {"id": "nvidia/nemotron-3-super-120b-a12b:free", "name": "Nvidia Nemotron 120B", "tier": "free"},
+        {"id": "meta-llama/llama-3.3-8b-instruct:free", "name": "Llama 3.3 8B", "tier": "free"},
+        {"id": "deepseek/deepseek-chat-v3-0324:free", "name": "DeepSeek V3", "tier": "free"},
+        {"id": "google/gemini-2.0-flash-exp:free", "name": "Gemini 2.0 Flash", "tier": "free"},
+        {"id": "qwen/qwen3-235b-a22b:free", "name": "Qwen 3 235B", "tier": "free"},
         {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet", "tier": "paid"},
-        {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "tier": "paid"},
-        {"id": "openai/gpt-4o", "name": "GPT-4o", "tier": "paid"},
+        {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini (via OR)", "tier": "paid"},
+        {"id": "openai/gpt-4o", "name": "GPT-4o (via OR)", "tier": "paid"},
     ],
     "openai": [
         {"id": "gpt-4o-mini", "name": "GPT-4o Mini", "tier": "paid"},
         {"id": "gpt-4o", "name": "GPT-4o", "tier": "paid"},
+        {"id": "gpt-4.1-mini", "name": "GPT-4.1 Mini", "tier": "paid"},
+        {"id": "gpt-4.1", "name": "GPT-4.1", "tier": "paid"},
         {"id": "gpt-4-turbo", "name": "GPT-4 Turbo", "tier": "paid"},
-        {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "tier": "paid"},
+        {"id": "o3-mini", "name": "o3-mini (Reasoning)", "tier": "paid"},
     ],
 }
 
@@ -43,10 +44,16 @@ def get_llm_settings():
         model = os.environ.get("OPENAI_MODEL", settings.OPENAI_MODEL)
         has_key = bool(os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY))
 
+    # Check if OpenAI key is available (for report generation)
+    has_openai = bool(os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY))
+    has_openrouter = bool(os.environ.get("OPENROUTER_API_KEY", settings.OPENROUTER_API_KEY))
+
     return {
         "provider": provider,
         "model": model,
         "has_key": has_key,
+        "has_openai_key": has_openai,
+        "has_openrouter_key": has_openrouter,
         "is_available": is_llm_available(),
         "available_models": AVAILABLE_MODELS.get(provider, []),
         "available_providers": ["openrouter", "openai"],
@@ -60,7 +67,7 @@ class LLMUpdate(BaseModel):
 
 @router.post("/llm")
 def update_llm_settings(update: LLMUpdate):
-    """Update LLM provider and/or model at runtime (in-memory, resets on restart)."""
+    """Update LLM provider and/or model at runtime."""
     if update.provider:
         if update.provider not in ("openrouter", "openai"):
             return {"error": f"Unknown provider: {update.provider}"}
