@@ -32,18 +32,24 @@ interface GradePyramidRow {
 
 const DIMENSION_TABS = [
   { id: 'department', label: 'Department' },
-  { id: 'business_unit', label: 'Business Unit' },
-  { id: 'function', label: 'Function' },
-  { id: 'grade', label: 'Grade' },
+  { id: 'grade_band', label: 'Grade Band' },
+  { id: 'function_family', label: 'Function Family' },
+  { id: 'job_family', label: 'Job Family' },
+  { id: 'seniority', label: 'Seniority' },
+  { id: 'grade_track', label: 'Career Track' },
   { id: 'country', label: 'Country' },
+  { id: 'business_unit', label: 'Business Unit' },
 ];
 
 const DIMENSION_ENDPOINTS: Record<string, string> = {
   department: '/api/workforce/by-department',
-  business_unit: '/api/workforce/by-business-unit',
-  function: '/api/workforce/by-function',
-  grade: '/api/workforce/by-grade',
+  grade_band: '/api/workforce/by-grade-band',
+  function_family: '/api/workforce/by-function-family',
+  job_family: '/api/workforce/by-job-family',
+  seniority: '/api/workforce/by-seniority',
+  grade_track: '/api/workforce/by-grade-track',
   country: '/api/workforce/by-country',
+  business_unit: '/api/workforce/by-business-unit',
 };
 
 const PIE_COLORS = ['#34d399', '#fb7185'];
@@ -64,8 +70,14 @@ export function Workforce() {
           api.get('/api/workforce/grade-pyramid'),
         ]);
         setSummary(sumRes.data);
-        setDimensionData({ department: deptRes.data });
-        setGradePyramid(pyramidRes.data);
+        // Normalize department data
+        const rawDept = deptRes.data?.data || deptRes.data || [];
+        const normDept = rawDept.map((item: any) => ({
+          name: item.department || item.name,
+          count: item.headcount ?? item.count ?? 0,
+        }));
+        setDimensionData({ department: normDept });
+        setGradePyramid(pyramidRes.data?.data || pyramidRes.data || []);
       } catch (err) {
         console.error('Workforce load error', err);
       } finally {
@@ -80,7 +92,14 @@ export function Workforce() {
     setDimLoading(true);
     try {
       const res = await api.get(DIMENSION_ENDPOINTS[dim]);
-      setDimensionData(prev => ({ ...prev, [dim]: res.data }));
+      // Normalize: API returns {data: [{key: val, headcount: n}]} — flatten to [{name, count}]
+      const raw = res.data?.data || res.data || [];
+      const normalized = raw.map((item: any) => {
+        const keys = Object.keys(item);
+        const nameKey = keys.find(k => k !== 'headcount' && k !== 'count' && k !== 'departments') || keys[0];
+        return { name: item[nameKey], count: item.headcount ?? item.count ?? 0 };
+      });
+      setDimensionData(prev => ({ ...prev, [dim]: normalized }));
     } catch (err) {
       console.error(`Failed to fetch ${dim}`, err);
     } finally {

@@ -165,3 +165,51 @@ def danger_zones():
         "threshold": round(threshold, 1),
         "danger_zones": danger,
     }
+
+
+@router.get("/by-grade-band")
+def turnover_by_grade_band():
+    """Turnover rate per grade band (IC, Senior IC, Management, Director, VP, etc.)."""
+    df = get_employees()
+    if "grade_band" not in df.columns:
+        return {"data": []}
+    result = []
+    for band, group in df.groupby("grade_band"):
+        total = len(group)
+        departed = int((~group["is_active"]).sum())
+        rate = round(departed / total * 100, 1) if total > 0 else 0
+        result.append({"grade_band": str(band), "total": total, "departed": departed, "turnover_rate": rate})
+    result.sort(key=lambda x: x["turnover_rate"], reverse=True)
+    return {"data": result}
+
+
+@router.get("/by-function-family")
+def turnover_by_function_family():
+    """Turnover rate per function family."""
+    df = get_employees()
+    if "function_family" not in df.columns:
+        return {"data": []}
+    result = []
+    for family, group in df.groupby("function_family"):
+        total = len(group)
+        departed = int((~group["is_active"]).sum())
+        rate = round(departed / total * 100, 1) if total > 0 else 0
+        result.append({"function_family": str(family), "total": total, "departed": departed, "turnover_rate": rate})
+    result.sort(key=lambda x: x["turnover_rate"], reverse=True)
+    return {"data": result}
+
+
+@router.get("/by-job-family")
+def turnover_by_job_family():
+    """Turnover rate per job family."""
+    df = get_employees()
+    if "job_family" not in df.columns:
+        return {"data": []}
+    result = []
+    for family, group in df.groupby("job_family"):
+        total = len(group)
+        departed = int((~group["is_active"]).sum())
+        rate = round(departed / total * 100, 1) if total > 0 else 0
+        result.append({"job_family": str(family), "total": total, "departed": departed, "turnover_rate": rate})
+    result.sort(key=lambda x: x["turnover_rate"], reverse=True)
+    return {"data": result}

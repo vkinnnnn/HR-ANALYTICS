@@ -23,17 +23,36 @@ class ChatResponse(BaseModel):
 
 
 async def _llm_call(system: str, user: str) -> str:
-    client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-    response = await client.chat.completions.create(
-        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.7,
-        max_tokens=1024,
-    )
-    return response.choices[0].message.content
+    import httpx
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY not set")
+    try:
+        client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient())
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content
+    except TypeError:
+        # Fallback if AsyncOpenAI has constructor issues
+        client = AsyncOpenAI(api_key=api_key)
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content
 
 
 def _build_workforce_context() -> str:

@@ -121,3 +121,63 @@ def active_vs_departed():
         "active": int(df["is_active"].sum()),
         "departed": int((~df["is_active"]).sum()),
     }
+
+
+@router.get("/by-grade-band")
+def by_grade_band():
+    """Headcount by standardized grade band (IC, Senior IC, Management, Director, VP, Executive, C-Suite)."""
+    df = get_employees()
+    active = df[df["is_active"]]
+    if "grade_band" not in active.columns:
+        return {"data": []}
+    counts = active["grade_band"].value_counts().reset_index()
+    counts.columns = ["grade_band", "headcount"]
+    return {"data": counts.to_dict(orient="records")}
+
+
+@router.get("/by-function-family")
+def by_function_family():
+    """Headcount by function family (Engineering, Sales, Marketing, etc.)."""
+    df = get_employees()
+    active = df[df["is_active"]]
+    if "function_family" not in active.columns:
+        return {"data": []}
+    counts = active["function_family"].value_counts().reset_index()
+    counts.columns = ["function_family", "headcount"]
+    return {"data": counts.to_dict(orient="records")}
+
+
+@router.get("/by-job-family")
+def by_job_family():
+    """Headcount by job family (Software Engineering, Sales, Customer Service, etc.)."""
+    df = get_employees()
+    active = df[df["is_active"]]
+    if "job_family" not in active.columns:
+        return {"data": []}
+    counts = active["job_family"].value_counts().reset_index()
+    counts.columns = ["job_family", "headcount"]
+    return {"data": counts.to_dict(orient="records")}
+
+
+@router.get("/by-seniority")
+def by_seniority():
+    """Headcount by title seniority level (Intern, Junior, Mid, Senior, Staff, Director, VP, C-Suite)."""
+    df = get_employees()
+    active = df[df["is_active"]]
+    if "title_seniority" not in active.columns:
+        return {"data": []}
+    counts = active["title_seniority"].value_counts().reset_index()
+    counts.columns = ["seniority", "headcount"]
+    return {"data": counts.to_dict(orient="records")}
+
+
+@router.get("/by-grade-track")
+def by_grade_track():
+    """Headcount by career track (professional, management, support, executive)."""
+    df = get_employees()
+    active = df[df["is_active"]]
+    if "grade_track" not in active.columns:
+        return {"data": []}
+    counts = active["grade_track"].value_counts().reset_index()
+    counts.columns = ["track", "headcount"]
+    return {"data": counts.to_dict(orient="records")}

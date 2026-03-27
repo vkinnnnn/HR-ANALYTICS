@@ -1,7 +1,19 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Built taxonomy.py, updated API docs, pushed to GitHub (vkinnnnn/HR-ANALYTICS). All code live.
+2026-03-27 — Built precise data-driven taxonomy (3,297 career moves, 25 grades, 151 functions classified). Continuous pipeline auto-runs on data load. All deployed and pushed to GitHub.
+
+### 2026-03-27 — Taxonomy Engine + Continuous Pipeline (Session 3)
+**What was done:**
+1. Deep analysis of actual dataset: 25 grade titles (P1-P6, M1-M6, S1-S5, E1-E2, EXEC, C-Suite, CEO), 151 functions, 869 job titles, 3,297 career transitions
+2. Rewrote taxonomy.py from scratch — deterministic rules based on Workhuman's actual grade/title patterns, NOT generic LLM
+3. Grade hierarchy: 4 career tracks (Professional P1-P6, Management M1-M6, Support S1-S5, Executive E1-E2+EXEC+C-Suite+CEO) with seniority_rank for comparison
+4. Function families: 12 families via regex (Engineering 765, Customer Success 470, Marketing 226, Sales 217, Operations 202, Product 155, HR 125, Finance 101, Executive 81, Data 73)
+5. Career move classifier: multi-signal (grade change + title level + job family change + title overlap) → promotion/lateral/demotion/restructure
+6. Integrated taxonomy into data_loader — auto-runs on every load, adds 7 enrichment columns to employee DataFrame
+7. Built /api/taxonomy router (6 endpoints: summary, grades, functions, job-families, career-moves, regenerate)
+8. Rebuilt Insights page with real charts (grade bands bar, career moves pie, function/job family bars, move examples)
+9. Deployed backend + frontend, pushed to GitHub (commit 5ef279d)
 
 ## Session History
 

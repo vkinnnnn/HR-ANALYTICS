@@ -110,12 +110,15 @@ async def stuck_employees():
 
     records = []
     for _, row in stuck.iterrows():
+        jt = row.get("current_job_title", row.get("job_title", ""))
         records.append({
             "PK_PERSON": int(row["PK_PERSON"]) if pd.notna(row["PK_PERSON"]) else None,
-            "job_title": row.get("current_job_title", row.get("job_title", "")),
-            "department": row.get("department_name", ""),
+            "job_title": str(jt) if pd.notna(jt) else "",
+            "department": str(row.get("department_name", "")) if pd.notna(row.get("department_name")) else "",
             "time_in_current_role_days": int(row["time_in_current_role_days"]),
-            "grade": row.get("grade_title", ""),
+            "tenure_years": round(float(row["tenure_years"]), 1) if pd.notna(row.get("tenure_years")) else 0,
+            "grade": str(row.get("grade_title", "")) if pd.notna(row.get("grade_title")) else "",
+            "grade_band": str(row.get("grade_band", "")) if pd.notna(row.get("grade_band")) else "",
         })
 
     return {
