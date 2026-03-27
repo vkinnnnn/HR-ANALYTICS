@@ -1,9 +1,33 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Completed full platform pivot from recognition → workforce analytics. Both frontend and backend deployed to production with real data.
+2026-03-27 — Fixed frontend types, cleaned stale files, redeployed, initialized git. Push to GitHub pending auth.
 
 ## Session History
+
+### 2026-03-27 — Cleanup, Types Fix, Git Init (Session 2)
+**What was done:**
+1. Read openmemory.md for context from previous session
+2. Fixed frontend/src/types/api.ts — replaced all old recognition interfaces with new workforce types (WorkforceSummary, TurnoverSummary, TenureSummary, FlightRiskEmployee, ManagerSummary, etc.)
+3. Cleaned up stale recognition-era files: removed create_taxonomy.py, run_topic_annotation.py, backend/pipeline/, old .txt doc files
+4. Updated .gitignore to exclude env.yaml, .claude/settings.local.json, .cursor/, .firebase/
+5. Verified all 8 major API endpoints return real data from Cloud Run
+6. Rebuilt frontend and redeployed to Firebase Hosting
+7. Initialized git repo, created initial commit (965cc63) with 80 files
+8. Push to GitHub failed — needs authentication (PAT or gh CLI)
+
+**Where I stopped:**
+- Git repo initialized with commit 965cc63 on `main` branch
+- Remote set to https://github.com/Regata3010/HR-Analytics.git
+- Push blocked by auth — user needs to run `gh auth login` or provide PAT
+- All code is deployed and live
+
+**What's next:**
+- Authenticate with GitHub and push
+- Build taxonomy.py (LLM-based job family/grade classification)
+- Update docs/api-deep-dive.md for new workforce API
+- Test each frontend page end-to-end against live backend
+
 
 ### 2026-03-27 — Full Platform Pivot & Redeployment
 **What was done:**
@@ -110,7 +134,9 @@
 - ❌ Git repo initialization and push to GitHub
 
 ### Where I Stopped
-Everything is deployed and live. The user was about to verify the live site. The openmemory.md file was just created per user instructions.
+- Git repo initialized, commit 965cc63 on `main` branch, push pending GitHub auth
+- All code deployed and live (Firebase + Cloud Run)
+- Next: GitHub push → taxonomy.py → update API docs → end-to-end frontend testing
 
 ---
 

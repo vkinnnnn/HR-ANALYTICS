@@ -1,192 +1,314 @@
-# Backend API Deep Dive
+# Workforce Analytics API Reference
 
-FastAPI app at `http://localhost:8000`. CORS allows `http://localhost:3000`.
-Entry point: `backend/app/main.py` using async lifespan context manager.
-DB: SQLAlchemy async + SQLite (ONLY for PipelineRun metadata, NOT HR data).
-All analytics read annotated CSVs directly via pandas.
+FastAPI backend. CORS allows `http://localhost:3000`.
 
-## 1. Analytics Router (`/api/analytics`)
+| Environment | Base URL |
+|---|---|
+| Development | `http://localhost:8000` |
+| Production | `https://hr-analytics-backend-88806953030.us-central1.run.app` |
 
-### Endpoints
-- `GET /files` — list available annotated CSV files in output/
-- `GET /summary` — total awards, unique recipients/nominators, date range, category counts
-- `GET /categories` — top-level category distribution (name, count, percentage)
-- `GET /subcategories?category=X` — subcategory breakdown, filterable
-- `GET /seasonality?granularity=day|week|month` — award volume over time (pandas resample)
-- `GET /trends` — category counts pivoted by month (multi-line chart data)
-- `GET /drift` — category share (%) per year for cultural evolution
-- `GET /inequality` — Gini coefficient + 20-point Lorenz curve + per-department Gini
+## Data Source
 
-### Gini Coefficient
-Measures recognition distribution inequality (0=equal, 1=one person gets all).
-Also returns Lorenz curve data for visualization.
-Computes per-department to identify concentrated recognition cultures.
+Three CSV files loaded into pandas at startup:
 
-### Noise Filtering
-Excludes: "NONE", "Congratulations", "Special Bonus", "Birthday", "life event", "yos"
-
-## 2. Predictions Router (`/api/predictions`)
-
-### Category Predictor
-- TF-IDF (max_features=5000, ngram_range=(1,2)) + LogisticRegression(max_iter=1000, C=5)
-- Returns top-3 predictions with confidence scores
-- Cached in memory, `/retrain` endpoint to refresh
-
-### Attrition Risk
-- Compares recognition volume: last 90 days vs prior 90 days
-- Flags employees with ≥50% drop
-- Returns: name, department, role, risk_score, days_since_last, recent_drop_pct
-
-### High Performers
-- Weighted composite: award count, frequency, diversity, recency, value
-- Returns ranked list with scores
-
-### Message Clusters
-- SentenceTransformer("all-MiniLM-L6-v2") → 384-dim embeddings → UMAP(n_neighbors=15, min_dist=0.1) → 2D
-- Fallback: TF-IDF + PCA if sentence-transformers unavailable
-- Returns x,y coordinates + category labels for scatter plot
-
-## 3. Copilot Router (`/api/copilot`)
-
-### Ghost-Writer (`POST /ghost-write`)
-Input: employee name, role, department, achievement description, tone (warm|formal|enthusiastic|concise), optional target category
-Prompt bans clichés: "goes above and beyond", "team player"
-Temperature: 0.7
-
-### Explainer (`POST /explain`)
-1. ML fast-prediction (TF-IDF, no LLM cost)
-2. LLM explanation quoting specific phrases → category justification
-
-### Team View (`GET /team-view?department=X`)
-Per-employee stats: total awards, recent (90d), days since last, top category, is_overlooked (90+d gap)
-
-### Report Generator (`POST /report`)
-Sends team stats to LLM → 3-paragraph executive report: findings → patterns → recommendations
-Temperature: 0.7
-
-## 4. Fairness Router (`/api/fairness`)
-
-### NLP Word Lists (Pure Python, no external NLP libs)
-- ACTION_VERBS: 40+ ("delivered", "built", "led", "automated"...)
-- TRAIT_ADJECTIVES: 30+ ("amazing", "hardworking"...)
-- CLICHE_PATTERNS: 8 regexes (r"goes? above and beyond", r"team player"...)
-
-### Specificity Score (per message, 0–1)
-- +0.4 if contains numbers (quantified impact)
-- +0.2 × action_verb_count (capped at 2)
-- +0.1 if word_count > 30
-- -0.1 if only trait adjectives with no action verbs
-
-### Audit
-Groups by: department | business_unit | gender | ethnicity
-Computes avg specificity per group
-Flags "fairness gaps": groups >0.8 std dev below company average
-Optional hr_employees.csv join for demographics
-
-## 5. Network Router (`/api/network`)
-
-### Graph Construction
-- Nodes: every recipient + nominator with metadata
-- Edges: directed, aggregated nom→rec pairs, weight = award count
-
-### PageRank
-Custom numpy: damping=0.85, 50 iterations (no networkx)
-Normalized to 1–10 scale for node sizing
-
-### Detection
-- is_isolated: receives zero nominations
-- is_giver_only: gives but never receives
-- reciprocal_pairs: A→B and B→A both exist
-- Filters: by business_unit, date_range
-
-## 6. Managers Router (`/api/managers`)
-
-### Scoring (4 dimensions, all min-max normalized 0–1)
-| Dimension | Weight | Description |
+| File | Rows | Description |
 |---|---|---|
-| Frequency | 30% | How many recognitions given |
-| Specificity | 35% | Average message quality (fairness scoring) |
-| Diversity | 25% | Breadth of taxonomy categories used |
-| Recency | 10% | How recently they gave recognition |
+| `function_wh.csv` | 2,466 | Current workforce snapshot (one row per person) |
+| `wh_history_full.csv` | 11,803 | Historical role/department/manager changes |
+| `wh_user_history_v2.csv` | 100 | Supplementary user history |
 
-### Blind Spot Detection
-Manager has blind spot if ≥70% of recognitions fall into single category.
+**Join key:** `PK_PERSON` = `pk_user`
+**Active employee:** `Expire` is null or in the future.
+**Departed employee:** `Expire` is filled with a past date.
 
-### Coaching Timeline (`/coaching-timeline`)
-Month-by-month scoring. delta_3m (last 3 vs prior 3 months) → "improving"/"declining"/"stable"
+### Key Formulas
 
-## 7. Drift Router (`/api/drift`)
+| Metric | Formula |
+|---|---|
+| Turnover rate | `departed / total * 100` |
+| Span of control | Direct reports per manager (from `fk_direct_manager`) |
+| Promotion velocity | Avg days between consecutive title changes per employee |
+| Flight risk | LogisticRegression on: `tenure_days`, `time_in_current_role_days`, `num_role_changes`, `num_manager_changes`, `num_actual_title_changes` |
 
-### Algorithm
-1. TF-IDF vectorize (max 2000 features, bigrams, sublinear TF)
-2. Compute category centroid vectors (mean of all messages per category)
-3. Cosine distance from each message to its category centroid
-4. Flag messages where distance ≥ 0.65 (threshold)
-5. KMeans micro-clusters (default k=4) on drifting messages
-6. Optional LLM naming ("Emerging: Cross-Team Collaboration")
-7. Return per-cluster top TF-IDF terms + sample messages
+---
 
-### Monthly Timeline
-Proportion of drifting messages per month — early warning for taxonomy refresh.
+## 1. Workforce Router — `/api/workforce`
 
-## 8. Outcomes Router (`/api/outcomes`)
+Headcount composition and structure.
 
-### Feature Engineering (per employee)
-total_awards, awards_per_quarter, category_diversity, recognition_gap_days, avg_award_value, category_name fractional presence (one-hot)
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/summary` | Total headcount, active/departed counts, avg tenure |
+| GET | `/by-department` | Headcount grouped by department |
+| GET | `/by-business-unit` | Headcount grouped by business unit |
+| GET | `/by-function` | Headcount grouped by function |
+| GET | `/by-grade` | Headcount grouped by grade/level |
+| GET | `/by-location` | Headcount grouped by location |
+| GET | `/by-country` | Headcount grouped by country |
+| GET | `/grade-pyramid` | Grade distribution shaped as a pyramid |
+| GET | `/headcount-trend` | Headcount over time (monthly) |
+| GET | `/active-vs-departed` | Side-by-side active vs departed breakdown |
 
-### Three Models
-1. **Promotion** (LogisticRegression, 5-fold CV, ROC-AUC): feature importances + likelihood multipliers
-2. **Attrition** (LogisticRegression): same structure
-3. **Performance** (Ridge Regression, alpha=1.0): continuous rating prediction
+```jsonc
+// GET /api/workforce/summary
+{
+  "total": 2466,
+  "active": 2104,
+  "departed": 362,
+  "turnover_rate": 14.68,
+  "avg_tenure_days": 1823.5
+}
 
-### Likelihood Multipliers
-outcome_rate(above_median_feature) / baseline_rate — plain-English insight
+// GET /api/workforce/by-department
+[
+  { "department": "Engineering", "count": 412, "pct": 16.71 },
+  { "department": "Sales", "count": 308, "pct": 12.49 }
+]
+```
 
-### Retention Radar (`/retention-radar`)
-Combines attrition model scores + business logic → per-employee risk list with recommended action + Ghost-Writer prefill data
+---
 
-## 9. ROI Router (`/api/roi`)
+## 2. Turnover Router — `/api/turnover`
 
-### Calculation
-- At-risk: recognition gap ≥90d OR awards_per_quarter < 0.5
-- Baseline: $15,000 replacement cost (configurable)
-- Reduction rate: 31% (Gallup/SHRM meta-analysis)
-- Returns: projected_cost, estimated_savings, net_roi, roi_pct, payback_months
+Attrition analysis.
 
-### What-If Scenarios
-Gap closure at 10%, 20%, 31%, 40%, 50% rates
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/summary` | Overall turnover rate and departed count |
+| GET | `/by-department` | Turnover rate per department |
+| GET | `/by-grade` | Turnover rate per grade |
+| GET | `/by-location` | Turnover rate per location |
+| GET | `/by-function` | Turnover rate per function |
+| GET | `/trend` | Monthly turnover over time |
+| GET | `/tenure-at-departure` | Distribution of tenure length at time of leaving |
+| GET | `/danger-zones` | Segments with abnormally high turnover |
 
-### Department Breakdown
-Which teams have highest financial exposure
+```jsonc
+// GET /api/turnover/danger-zones
+[
+  {
+    "segment": "Sales — Grade 5 — London",
+    "turnover_rate": 32.1,
+    "departed": 18,
+    "total": 56,
+    "severity": "high"
+  }
+]
+```
 
-## 10. Pulse Router (`/api/pulse`)
-- Week-over-week volume change
-- Droughts: employees not recognized in 60+ days
-- Dormant managers: haven't given recognition in 60+ days
-- Severity: ≥25% drop=Warning, ≥40%=Critical, 180+d drought=Critical
-- `/slack-preview`: full Slack Block Kit JSON for webhook
+---
 
-## 11. Pipeline Router (`/api/pipeline`)
-- `POST /start` — start taxonomy or annotation run
-- `GET /status/{id}` — poll run status
-- Tracks in SQLite: PipelineRun(id, run_type, status, input_file, output_file, config_json, log, total_cost, timestamps)
+## 3. Tenure Router — `/api/tenure`
 
-## 12. Export Router (`/api/export`)
-- Bundles into ZIP: awards_annotated.csv, outcomes.csv, hr_employees.csv, README.txt
-- README includes: Power BI loading instructions, table relationships, DAX measures, visualization ideas
-- Uses FastAPI StreamingResponse (no memory buffering)
+Tenure distribution and retention analysis.
 
-## Database Model (SQLAlchemy)
-```python
-class PipelineRun(Base):
-    id: Mapped[int] (primary_key, autoincrement)
-    run_type: Mapped[str]        # "taxonomy" | "annotation"
-    status: Mapped[str]          # "pending" | "running" | "done" | "failed"
-    input_file: Mapped[str]
-    output_file: Mapped[str | None]
-    config_json: Mapped[str | None]
-    log: Mapped[str | None]
-    total_cost: Mapped[float | None]
-    created_at: Mapped[datetime]
-    updated_at: Mapped[datetime]
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/summary` | Avg/median/p90 tenure, active vs departed |
+| GET | `/by-department` | Avg tenure per department |
+| GET | `/by-grade` | Avg tenure per grade |
+| GET | `/cohorts` | Tenure grouped by hire-year cohort |
+| GET | `/distribution` | Histogram buckets (0-1y, 1-2y, 2-5y, 5-10y, 10y+) |
+| GET | `/long-tenured` | Employees with tenure above threshold |
+| GET | `/short-departures` | Departed employees who left within first year |
+| GET | `/retention-curve` | Survival/retention curve by months since hire |
+
+```jsonc
+// GET /api/tenure/distribution
+[
+  { "bucket": "0-1 years", "count": 310, "pct": 12.57 },
+  { "bucket": "1-2 years", "count": 485, "pct": 19.67 },
+  { "bucket": "2-5 years", "count": 890, "pct": 36.09 },
+  { "bucket": "5-10 years", "count": 520, "pct": 21.09 },
+  { "bucket": "10+ years", "count": 261, "pct": 10.58 }
+]
+```
+
+---
+
+## 4. Careers Router — `/api/careers`
+
+Promotions, title changes, and career progression.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/summary` | Avg promotion velocity, total title changes |
+| GET | `/promotion-velocity` | Avg days between promotions, by grade and dept |
+| GET | `/stuck-employees` | Employees with no title change in extended period |
+| GET | `/career-paths` | Common title progression sequences |
+| GET | `/title-changes` | Recent title change events |
+| GET | `/by-department` | Career mobility stats per department |
+
+```jsonc
+// GET /api/careers/promotion-velocity
+{
+  "overall_avg_days": 547,
+  "by_grade": [
+    { "grade": "5", "avg_days_to_next": 612 },
+    { "grade": "6", "avg_days_to_next": 483 }
+  ]
+}
+```
+
+---
+
+## 5. Managers Router — `/api/managers`
+
+Manager effectiveness and span of control.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/summary` | Total managers, avg span, median span |
+| GET | `/span-distribution` | Histogram of span-of-control values |
+| GET | `/leaderboard` | Managers ranked by team size |
+| GET | `/retention` | Manager-level retention rates (team turnover) |
+| GET | `/ratio-by-department` | Manager-to-IC ratio per department |
+| GET | `/churn` | Manager turnover (managers who departed) |
+
+```jsonc
+// GET /api/managers/summary
+{
+  "total_managers": 318,
+  "avg_span": 6.2,
+  "median_span": 5,
+  "max_span": 24,
+  "managers_with_1_report": 42
+}
+```
+
+---
+
+## 6. Org Router — `/api/org`
+
+Organizational structure and change.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/summary` | Dept count, avg dept size, org depth |
+| GET | `/department-sizes` | Employee count per department |
+| GET | `/department-growth` | Headcount change per department over time |
+| GET | `/restructuring` | Department transfer events |
+| GET | `/hierarchy` | Org tree from manager relationships |
+| GET | `/layers` | Number of hierarchy layers per department |
+
+```jsonc
+// GET /api/org/layers
+[
+  { "department": "Engineering", "layers": 5, "deepest_chain": "VP > Dir > Sr Mgr > Mgr > IC" },
+  { "department": "Marketing", "layers": 3, "deepest_chain": "Dir > Mgr > IC" }
+]
+```
+
+---
+
+## 7. Predictions Router — `/api/predictions`
+
+ML-based flight risk scoring.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/flight-risk` | Per-employee flight risk scores (0-1) |
+| GET | `/feature-importance` | Model feature weights |
+| GET | `/risk-by-department` | Avg flight risk aggregated by department |
+| POST | `/retrain` | Retrain the LogisticRegression model on current data |
+
+**Model:** `LogisticRegression` trained on departed employees as positive class.
+
+**Features:**
+- `tenure_days` — total days since hire
+- `time_in_current_role_days` — days in current title
+- `num_role_changes` — number of department/role moves
+- `num_manager_changes` — number of manager reassignments
+- `num_actual_title_changes` — number of distinct title changes
+
+```jsonc
+// GET /api/predictions/flight-risk
+[
+  {
+    "pk_person": 1042,
+    "name": "Jane Doe",
+    "department": "Sales",
+    "risk_score": 0.82,
+    "top_factors": ["time_in_current_role_days", "num_manager_changes"]
+  }
+]
+
+// GET /api/predictions/feature-importance
+[
+  { "feature": "time_in_current_role_days", "importance": 0.34 },
+  { "feature": "num_manager_changes", "importance": 0.28 },
+  { "feature": "tenure_days", "importance": -0.22 },
+  { "feature": "num_role_changes", "importance": 0.11 },
+  { "feature": "num_actual_title_changes", "importance": 0.05 }
+]
+```
+
+---
+
+## 8. Chat Router — `/api/chat`
+
+Natural-language Q&A over the workforce data.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/query` | Send a question, get an LLM-generated answer |
+
+```jsonc
+// POST /api/chat/query
+// Request:
+{ "question": "Which department has the highest turnover?" }
+
+// Response:
+{
+  "answer": "Sales has the highest turnover rate at 22.3%, followed by Support at 18.7%.",
+  "sources": ["turnover_by_department"]
+}
+```
+
+---
+
+## 9. Reports Router — `/api/reports`
+
+Pre-built report generation.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/executive-summary` | Generate an LLM-written executive summary |
+| GET | `/export` | Download report data as file |
+
+```jsonc
+// POST /api/reports/executive-summary
+// Response:
+{
+  "summary": "...",
+  "key_metrics": {
+    "headcount": 2104,
+    "turnover_rate": 14.68,
+    "avg_tenure_years": 4.99,
+    "flight_risk_high_count": 87
+  },
+  "recommendations": ["...", "..."]
+}
+```
+
+---
+
+## 10. Upload Router — `/api/upload`
+
+Data ingestion and reload.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/csv` | Upload a new CSV file (multipart/form-data) |
+| GET | `/status` | Check processing status of last upload |
+| POST | `/reload` | Re-read all CSVs from disk and rebuild in-memory dataframes |
+
+```jsonc
+// POST /api/upload/csv
+// Request: multipart/form-data with file field
+// Response:
+{ "filename": "function_wh.csv", "rows": 2466, "status": "accepted" }
+
+// POST /api/upload/reload
+{ "status": "ok", "tables_loaded": 3, "total_rows": 14369 }
 ```
