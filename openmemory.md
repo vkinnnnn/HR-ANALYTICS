@@ -1,7 +1,17 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Built precise data-driven taxonomy (3,297 career moves, 25 grades, 151 functions classified). Continuous pipeline auto-runs on data load. All deployed and pushed to GitHub.
+2026-03-27 — Fixed broken endpoints, added taxonomy-enriched dimensions (8 workforce + 3 turnover), updated Workforce page with 8 tabs. All deployed + pushed.
+
+### 2026-03-27 — Bug Fixes + Taxonomy Dimensions (Session 4)
+**What was done:**
+1. Tested all API endpoints — found 3 broken: careers/stuck-employees (NaN serialization), chat/query (OpenAI proxies error), org/restructuring (returning 0)
+2. Fixed careers/stuck-employees — NaN-safe string conversion for all fields
+3. Fixed chat.py + reports.py — added httpx.AsyncClient() fallback for OpenAI AsyncClient proxies issue
+4. Added 5 new workforce endpoints: by-grade-band, by-function-family, by-job-family, by-seniority, by-grade-track
+5. Added 3 new turnover endpoints: by-grade-band, by-function-family, by-job-family
+6. Updated Workforce page — 8 dimension tabs (dept, grade band, function family, job family, seniority, career track, country, BU) with normalized data parsing
+7. Deployed both frontend + backend, pushed to GitHub (commit 4688c76)
 
 ### 2026-03-27 — Taxonomy Engine + Continuous Pipeline (Session 3)
 **What was done:**

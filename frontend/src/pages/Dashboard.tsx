@@ -13,11 +13,13 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 interface Summary {
-  active_headcount: number;
+  total_headcount: number;
+  active: number;
   departed: number;
   turnover_rate: number;
   avg_tenure_years: number;
   unique_departments: number;
+  unique_locations: number;
 }
 
 interface HeadcountPoint {
@@ -36,8 +38,10 @@ interface TenureBucket {
 }
 
 interface FlightRisk {
-  name: string;
+  pk_person: string;
+  job_title: string;
   department: string;
+  tenure_years: number;
   risk_score: number;
 }
 
@@ -60,10 +64,11 @@ export function Dashboard() {
           api.get('/api/predictions/flight-risk', { params: { top_n: 5 } }),
         ]);
         setSummary(sumRes.data);
-        setHeadcountTrend(trendRes.data);
-        setDeptTurnover(deptRes.data.slice(0, 10));
-        setTenureDist(tenureRes.data);
-        setFlightRisk(riskRes.data);
+        setHeadcountTrend(trendRes.data?.data || trendRes.data || []);
+        const turnoverData = (deptRes.data?.data || deptRes.data || []).slice(0, 10);
+        setDeptTurnover(turnoverData);
+        setTenureDist(tenureRes.data?.data || tenureRes.data || []);
+        setFlightRisk(riskRes.data?.employees || riskRes.data || []);
       } catch (err) {
         console.error('Dashboard load error', err);
       } finally {
@@ -87,7 +92,7 @@ export function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <KpiCard
           label="Active Headcount"
-          value={summary?.active_headcount ?? 0}
+          value={summary?.active ?? 0}
           icon={<Users size={18} />}
           color="#34d399"
           delay={0}
@@ -218,7 +223,7 @@ export function Dashboard() {
                   borderBottom: '1px solid rgba(255,255,255,0.06)',
                 }}
               >
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Job Title</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Department</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Risk</span>
               </div>
@@ -238,7 +243,7 @@ export function Dashboard() {
                     }}
                     className="hover:bg-white/[0.02]"
                   >
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{emp.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{emp.job_title}</span>
                     <span style={{ fontSize: 12, color: '#a1a1aa' }}>{emp.department}</span>
                     <Badge
                       label={`${(emp.risk_score * 100).toFixed(0)}%`}
