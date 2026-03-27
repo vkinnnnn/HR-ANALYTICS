@@ -1,11 +1,70 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Complete rewrite of openmemory.md reflecting all 9 sessions of work. MCP ecosystem live. All infrastructure deployed.
+2026-03-27 — Session 10: Dashboard visual overhaul + AI chatbot panel.
 
 ---
 
 ## Session History (Reverse Chronological)
+
+### Session 10 — Dashboard Visual Overhaul + AI Chatbot Panel
+
+**Steps Completed:**
+
+1. **Ambient Background** — Verified AmbientBackground.tsx rendering in App.tsx (was already correct)
+2. **PageHero Component** — Rewrote to match design spec: 40x40 gradient icon, 24px/800w title, 13px subtitle at ml-52, 48px orange underline at ml-52 opacity 0.5
+3. **Dashboard KPI Cards** — Replaced 5-column generic KPIs with 4 specific cards: Total Headcount (orange), Turnover Rate (rose), Avg Tenure (purple), New Hires 90d (emerald). Glass panel, animated numbers, stagger fadeUp, change indicators
+4. **AI Insight Banner** — Added data-driven InsightBanner between KPIs and charts. Reads highest turnover dept + top flight risk employees from live data
+5. **Chart Panels** — All 4 panels: glass morphism (rgba bg, blur-20, border-subtle, rounded-xl, box-shadow), SectionHeader with 30x30 icon containers, Badge actions
+6. **Turnover Chart** — Two-color system (rose above avg, emerald at/below), dashed ReferenceLine at company average, bar size 14px radius [0,4,4,0], click-to-chat integration
+7. **Tenure Distribution** — Changed backend bins to: 0-6mo, 6-12mo, 1-2yr, 2-3yr, 3-5yr, 5-10yr, 10yr+. Rose for first 2 (early attrition), purple for rest. Added median_tenure_years to API
+8. **Flight Risk Table** — Filtered NaN job titles, EMP-{id} fallback, colored risk badges (rose 80%+, amber 60-80%), CSS Grid rows with glass styling, "Take Action" ghost buttons
+9. **ChartTooltip** — Glass morphism: rgba(19,19,24,0.95), blur-16, border-medium, rounded-12, 12px/40px box-shadow, 10px/700w uppercase labels with colored dots
+10. **Glass Panel CSS** — Added box-shadow: 0 1px 3px rgba(0,0,0,0.3) to .glass-panel class
+11. **SectionHeader fix** — Subtitle: 11px (was 12px), color #52525b (was #71717a) per spec
+12. **Backend workforce/summary** — Added new_hires_90d, prior_hires_90d fields
+13. **AI Chatbot Panel** — Built complete slide-out panel system:
+    - ChatTrigger.tsx: Fixed bottom-right pill, gradient orange, glow shadow, Sparkles icon
+    - ChatPanel.tsx: 420px slide-out, glass bg (blur-24), slide animation 280ms
+    - Header: "AI Assistant" + GPT-4o-mini badge + close button
+    - Messages: user (orange-tinted, right) / assistant (glass, left), markdown rendering
+    - MiniChart: inline bar/line/pie rendering in AI message bubbles
+    - Typing indicator: 3-dot staggered pulse
+    - Suggested prompts: page-aware pills (dashboard/turnover/careers/managers/tenure/flight-risk)
+    - Input: auto-resize textarea, gradient send button, Enter=send Shift+Enter=newline
+    - Context-awareness: sends current_page to backend
+    - Chart-click integration: clicking turnover bar auto-opens chat with prefilled question
+14. **App.tsx rewrite** — Chat state at App level (persists across navigation), margin-right transition (content compresses, not obscured), ChatTrigger on every page
+15. **Backend chat.py** — Enhanced to accept current_page + filters, adds page context to LLM prompt
+
+**Files Modified:**
+- `frontend/src/App.tsx` — full rewrite
+- `frontend/src/pages/Dashboard.tsx` — full rewrite
+- `frontend/src/components/ui/PageHero.tsx` — rewrite
+- `frontend/src/components/ui/KpiCard.tsx` — rewrite (format, suffix, change props)
+- `frontend/src/components/ui/AnimatedNumber.tsx` — rewrite (decimal format)
+- `frontend/src/components/ui/InsightBanner.tsx` — rewrite (title prop)
+- `frontend/src/components/ui/SectionHeader.tsx` — subtitle fix
+- `frontend/src/components/charts/ChartTooltip.tsx` — rewrite (glass spec)
+- `frontend/src/components/chat/ChatTrigger.tsx` — NEW
+- `frontend/src/components/chat/ChatPanel.tsx` — NEW
+- `frontend/src/index.css` — box-shadow on .glass-panel
+- `backend/app/routers/workforce.py` — new_hires_90d, prior_hires_90d
+- `backend/app/routers/tenure.py` — meaningful bins, median_tenure_years
+- `backend/app/routers/chat.py` — current_page, filters context
+
+16. **Settings Router** — NEW `backend/app/routers/settings.py`: GET/POST `/api/settings/llm` for runtime LLM switching
+17. **Settings Page** — Full rewrite: live provider/model picker (OpenRouter/OpenAI), 8 models listed, radio-style selection, "Apply Changes" button
+18. **Unified LLM Client** — NEW `backend/app/llm.py`: shared client for OpenRouter + OpenAI, used by chat.py and reports.py
+19. **OpenRouter Integration** — Default provider: Nvidia Nemotron 120B (free). `.env` with OPENROUTER_API_KEY
+20. **Local Chat Fallback** — chat.py pattern-matches questions (turnover, tenure, headcount, department) when no API key
+21. **Local Report Fallback** — reports.py generates data-driven executive summary without LLM
+22. **README** — Complete rewrite with setup guide, architecture, all 14 pages, API reference, env vars
+
+**Known Issues:**
+- new_hires_90d = 0 because dataset is historical (no hires in last 90 days). This is correct data behavior.
+- Port 8000 had zombie processes on Windows; running on port 8003
+- Figma MCP OAuth not completed yet — validation pass (step 14) pending
 
 ### Session 9 — MCP + Skills Ecosystem
 - Added Memory MCP (`@modelcontextprotocol/server-memory`) — persistent knowledge graph at `.mcp-data/memory/`

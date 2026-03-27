@@ -18,7 +18,7 @@ export function SectionHeader({ icon, title, subtitle, action }: SectionHeaderPr
         )}
         <div>
           <h3 style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em', color: '#fafafa' }}>{title}</h3>
-          {subtitle && <p style={{ fontSize: 12, color: '#71717a', marginTop: 2 }}>{subtitle}</p>}
+          {subtitle && <p style={{ fontSize: 11, color: '#52525b', marginTop: 2 }}>{subtitle}</p>}
         </div>
       </div>
       {action}

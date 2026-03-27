@@ -6,15 +6,16 @@ import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from openai import AsyncOpenAI
-
 from ..data_loader import get_employees, is_loaded
+from ..llm import llm_call as _llm_call_unified
 
 router = APIRouter()
 
 
 class ChatQuery(BaseModel):
     question: str
+    current_page: str | None = None
+    filters: dict | None = None
 
 
 class ChatResponse(BaseModel):
@@ -23,36 +24,7 @@ class ChatResponse(BaseModel):
 
 
 async def _llm_call(system: str, user: str) -> str:
-    import httpx
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set")
-    try:
-        client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient())
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.7,
-            max_tokens=1024,
-        )
-        return response.choices[0].message.content
-    except TypeError:
-        # Fallback if AsyncOpenAI has constructor issues
-        client = AsyncOpenAI(api_key=api_key)
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.7,
-            max_tokens=1024,
-        )
-        return response.choices[0].message.content
+    return await _llm_call_unified(system, user)
 
 
 def _build_workforce_context() -> str:
@@ -195,6 +167,75 @@ TURNOVER BY DEPARTMENT (highest turnover, top 10):
     return context
 
 
+def _local_chat_response(question: str) -> str:
+    """Generate a data-driven response without LLM by pattern-matching the question."""
+    import re
+    df = get_employees()
+    active = df[df["is_active"]]
+    departed = df[~df["is_active"]]
+    q = question.lower()
+
+    # Turnover questions
+    if any(w in q for w in ["turnover", "attrition", "leaving", "depart"]):
+        total = len(df)
+        dep = len(departed)
+        rate = round(dep / total * 100, 1) if total > 0 else 0
+        dept_turnover = (
+            df.groupby("department_name")
+            .agg(total=("is_active", "count"), dep=("is_active", lambda x: int((~x).sum())))
+        )
+        dept_turnover["pct"] = (dept_turnover["dep"] / dept_turnover["total"] * 100).round(1)
+        worst = dept_turnover.sort_values("pct", ascending=False).head(5)
+        lines = [f"**Overall turnover rate: {rate}%** ({dep} departed out of {total} total)\n", "**Highest turnover departments:**"]
+        for dept, row in worst.iterrows():
+            lines.append(f"- {dept}: {row['pct']}% ({int(row['dep'])}/{int(row['total'])})")
+        return "\n".join(lines) + "\n\n```json\n" + _chart_json("bar", list(worst.index), [float(v) for v in worst["pct"]], "Turnover by Department (%)") + "\n```"
+
+    # Tenure questions
+    if any(w in q for w in ["tenure", "how long", "years of service"]):
+        avg_t = round(float(active["tenure_years"].mean()), 1)
+        med_t = round(float(active["tenure_years"].median()), 1)
+        return f"**Average tenure:** {avg_t} years\n**Median tenure:** {med_t} years\n\nActive employees: {len(active)}"
+
+    # Headcount / workforce questions
+    if any(w in q for w in ["headcount", "how many", "employee count", "workforce"]):
+        dept_counts = active.groupby("department_name").size().sort_values(ascending=False).head(10)
+        lines = [f"**Total active employees: {len(active)}** (out of {len(df)} total)\n", "**Top departments:**"]
+        for dept, count in dept_counts.items():
+            lines.append(f"- {dept}: {count}")
+        return "\n".join(lines)
+
+    # Department-specific
+    dept_match = None
+    for dept in df["department_name"].unique():
+        if dept.lower() in q:
+            dept_match = dept
+            break
+    if dept_match:
+        d = df[df["department_name"] == dept_match]
+        act = int(d["is_active"].sum())
+        dep_c = len(d) - act
+        avg_t = round(float(d["tenure_years"].mean()), 1)
+        return f"**{dept_match}:** {len(d)} total, {act} active, {dep_c} departed\n**Avg tenure:** {avg_t} years\n**Turnover:** {round(dep_c/len(d)*100,1)}%"
+
+    # Risk questions
+    if any(w in q for w in ["risk", "flight", "danger"]):
+        return "Flight risk analysis requires the ML model to be trained. Visit the **Flight Risk** page and ensure the model has been trained. Key risk factors include: tenure, time in current role, manager changes, and grade stagnation."
+
+    # Default
+    return (
+        f"I have data on **{len(df)} employees** ({len(active)} active, {len(departed)} departed). "
+        f"I can answer questions about **turnover, tenure, headcount, departments, grades, and career mobility**. "
+        f"Try asking: 'What is the turnover rate?' or 'Tell me about the Technology department'.\n\n"
+        f"*Note: Set `OPENAI_API_KEY` for AI-powered natural language responses.*"
+    )
+
+
+def _chart_json(chart_type: str, labels: list, values: list, title: str) -> str:
+    import json
+    return json.dumps({"chart_type": chart_type, "labels": labels, "values": values, "title": title})
+
+
 SYSTEM_PROMPT_TEMPLATE = """You are an HR Workforce Analytics assistant. You have access to summary statistics from an employee dataset covering hire/departure dates, job history, organizational structure, and career progression.
 
 Use the following workforce data context to answer the user's question. Be specific with numbers when available. If the data doesn't contain enough information to answer precisely, say so and provide what you can.
@@ -222,7 +263,23 @@ async def chat_query(query: ChatQuery):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     context = _build_workforce_context()
-    system = SYSTEM_PROMPT_TEMPLATE.format(context=context)
+    page_hint = ""
+    if query.current_page:
+        page_map = {
+            "/": "dashboard overview",
+            "/turnover": "turnover & attrition analysis",
+            "/tenure": "tenure analysis",
+            "/careers": "career progression",
+            "/managers": "manager analytics",
+            "/org": "organizational structure",
+            "/flight-risk": "flight risk predictions",
+            "/workforce": "workforce composition",
+        }
+        page_label = page_map.get(query.current_page, query.current_page)
+        page_hint = f"\nThe user is currently viewing the {page_label} page. Tailor your answer to that context."
+    if query.filters:
+        page_hint += f"\nActive filters: {query.filters}"
+    system = SYSTEM_PROMPT_TEMPLATE.format(context=context) + page_hint
 
     # Append instruction to include chart data when relevant
     user_msg = query.question.strip()
@@ -234,6 +291,9 @@ async def chat_query(query: ChatQuery):
 
     try:
         answer = await _llm_call(system, user_msg)
+    except ValueError:
+        # No API key — return a helpful local response
+        answer = _local_chat_response(query.question)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
 

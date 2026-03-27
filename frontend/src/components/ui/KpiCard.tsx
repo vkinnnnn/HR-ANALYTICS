@@ -7,7 +7,8 @@ import { AnimatedNumber } from './AnimatedNumber';
 interface KpiCardProps {
   label: string;
   value: number;
-  format?: 'number' | 'currency' | 'percent';
+  format?: 'number' | 'currency' | 'percent' | 'decimal';
+  suffix?: string;
   change?: number;
   changeLabel?: string;
   icon?: ReactNode;
@@ -17,7 +18,7 @@ interface KpiCardProps {
   className?: string;
 }
 
-export function KpiCard({ label, value, format = 'number', change, changeLabel, icon, color = '#FF8A4C', delay = 0, loading, className }: KpiCardProps) {
+export function KpiCard({ label, value, format = 'number', suffix, change, changeLabel, icon, color = '#FF8A4C', delay = 0, loading, className }: KpiCardProps) {
   if (loading) {
     return (
       <Panel delay={delay} className={className}>
@@ -32,15 +33,23 @@ export function KpiCard({ label, value, format = 'number', change, changeLabel, 
   return (
     <Panel delay={delay} className={cn('relative', className)}>
       {icon && (
-        <div className="absolute top-5 right-5 w-[38px] h-[38px] rounded-[8px] flex items-center justify-center" style={{ background: `${color}1a` }}>
+        <div
+          className="absolute top-5 right-5 flex items-center justify-center"
+          style={{ width: 38, height: 38, borderRadius: 12, background: `${color}1a` }}
+        >
           <span style={{ color }}>{icon}</span>
         </div>
       )}
-      <p className="text-label mb-1">{label}</p>
-      <div className="flex items-baseline gap-2">
-        <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a', marginBottom: 4 }}>
+        {label}
+      </p>
+      <div className="flex items-baseline gap-1">
+        <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafafa' }}>
           <AnimatedNumber value={value} format={format} />
         </span>
+        {suffix && (
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#71717a' }}>{suffix}</span>
+        )}
       </div>
       {change !== undefined && (
         <div className="flex items-center gap-1 mt-2" style={{ fontSize: 12 }}>

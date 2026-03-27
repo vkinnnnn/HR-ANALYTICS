@@ -4,11 +4,16 @@ from typing import Literal
 
 class Settings(BaseSettings):
     # LLM Provider
-    LLM_PROVIDER: Literal["openai", "bedrock"] = "openai"
+    LLM_PROVIDER: Literal["openai", "openrouter", "bedrock"] = "openrouter"
 
     # OpenAI
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
+
+    # OpenRouter
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
     # AWS Bedrock
     AWS_REGION: str = "us-east-1"

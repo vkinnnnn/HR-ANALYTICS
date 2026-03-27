@@ -3,7 +3,7 @@ import { formatNumber, formatCurrency } from '../../lib/utils';
 
 interface AnimatedNumberProps {
   value: number;
-  format?: 'number' | 'currency' | 'percent';
+  format?: 'number' | 'currency' | 'percent' | 'decimal';
   duration?: number;
 }
 
@@ -32,6 +32,8 @@ export function AnimatedNumber({ value, format = 'number', duration = 800 }: Ani
     ? formatCurrency(display)
     : format === 'percent'
     ? `${display.toFixed(1)}%`
+    : format === 'decimal'
+    ? display.toFixed(1)
     : formatNumber(display);
 
   return <>{formatted}</>;

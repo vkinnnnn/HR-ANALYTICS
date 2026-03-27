@@ -9,35 +9,15 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from openai import AsyncOpenAI
 
 from ..data_loader import get_employees, get_history, is_loaded
+from ..llm import llm_call as _llm_call_unified, is_llm_available
 
 router = APIRouter()
 
 
 async def _llm_call(system: str, user: str) -> str:
-    import httpx
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set")
-    try:
-        client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient())
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=1024,
-        )
-        return response.choices[0].message.content
-    except TypeError:
-        client = AsyncOpenAI(api_key=api_key)
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=1024,
-        )
-        return response.choices[0].message.content
+    return await _llm_call_unified(system, user)
 
 
 def _build_report_context() -> str:
@@ -125,34 +105,123 @@ Country Distribution (active, top 10):
     return context
 
 
+def _generate_local_summary() -> str:
+    """Generate a data-driven executive summary without LLM when no API key is available."""
+    df = get_employees()
+    total = len(df)
+    active = int(df["is_active"].sum())
+    departed = total - active
+    turnover = round(departed / total * 100, 1) if total > 0 else 0.0
+    avg_tenure = round(float(df["tenure_years"].mean()), 1)
+    median_tenure = round(float(df["tenure_years"].median()), 1)
+    active_df = df[df["is_active"]]
+
+    # Worst departments
+    dept_stats = (
+        df.groupby("department_name")
+        .agg(total=("is_active", "count"), departed=("is_active", lambda x: int((~x).sum())))
+    )
+    dept_stats["turnover_pct"] = (dept_stats["departed"] / dept_stats["total"] * 100).round(1)
+    worst_depts = dept_stats.sort_values("turnover_pct", ascending=False).head(5)
+
+    # Best departments
+    best_depts = dept_stats[dept_stats["total"] >= 10].sort_values("turnover_pct").head(3)
+
+    # Tenure at-risk
+    short_tenure = int((active_df["tenure_years"] < 1).sum())
+    long_tenure = int((active_df["tenure_years"] > 10).sum())
+
+    # Mobility
+    avg_role_changes = round(float(active_df["num_role_changes"].mean()), 1)
+    avg_time_in_role = int(active_df["time_in_current_role_days"].mean())
+
+    # Country
+    top_countries = active_df["country"].value_counts().head(3) if "country" in active_df.columns else None
+
+    lines = [
+        "## Executive Workforce Summary",
+        "",
+        f"**Generated:** {datetime.now().strftime('%B %d, %Y')}",
+        "",
+        "### 1. Workforce Health Overview",
+        "",
+        f"The organization has **{total:,} total employees** — **{active:,} active** and **{departed:,} departed**.",
+        f"The overall turnover rate stands at **{turnover}%**.",
+        f"Average employee tenure is **{avg_tenure} years** (median: {median_tenure} years).",
+        "",
+        "### 2. Key Risk Areas",
+        "",
+        "**Highest turnover departments:**",
+    ]
+    for dept, row in worst_depts.iterrows():
+        lines.append(f"- **{dept}**: {row['turnover_pct']}% turnover ({int(row['departed'])} of {int(row['total'])} departed)")
+
+    lines += [
+        "",
+        f"**Early attrition risk:** {short_tenure} active employees have less than 1 year tenure.",
+        f"**Institutional knowledge risk:** {long_tenure} employees have 10+ years tenure — succession planning recommended.",
+        "",
+        "### 3. Career Mobility & Development",
+        "",
+        f"- Average role changes per employee: **{avg_role_changes}**",
+        f"- Average time in current role: **{avg_time_in_role} days** ({round(avg_time_in_role/365, 1)} years)",
+    ]
+
+    if avg_time_in_role > 1095:
+        lines.append("- ⚠ Average time in role exceeds 3 years — potential stagnation concern")
+
+    lines += ["", "### 4. Geographic Distribution", ""]
+    if top_countries is not None:
+        for country, count in top_countries.items():
+            lines.append(f"- **{country}**: {count} active employees")
+
+    lines += [
+        "",
+        "### 5. Recommendations",
+        "",
+        f"1. **Investigate high-turnover departments** — {worst_depts.index[0]} at {worst_depts.iloc[0]['turnover_pct']}% needs immediate attention",
+        "2. **Strengthen onboarding** — reduce early attrition for employees under 1 year",
+        "3. **Career development programs** — address role stagnation for employees 3+ years in same position",
+        "4. **Succession planning** — identify and document institutional knowledge from long-tenured employees",
+        "5. **Manager effectiveness review** — correlate manager retention rates with team turnover",
+    ]
+
+    if len(best_depts) > 0:
+        lines.append(f"6. **Learn from success** — {best_depts.index[0]} has the lowest turnover — study their practices")
+
+    return "\n".join(lines)
+
+
 @router.post("/executive-summary")
 async def executive_summary():
-    """Generate an LLM-powered executive summary of workforce health."""
+    """Generate an executive summary of workforce health. Uses LLM if API key is set, otherwise generates locally."""
     if not is_loaded():
         raise HTTPException(status_code=503, detail="Data not loaded. Upload data first.")
 
-    context = _build_report_context()
+    use_llm = is_llm_available()
 
-    system = (
-        "You are a senior HR analytics consultant writing an executive summary for the CHRO. "
-        "Write a professional, data-driven executive summary covering:\n"
-        "1. Overall Workforce Health (headcount, turnover, tenure)\n"
-        "2. Key Risk Areas (high-turnover departments, tenure concerns)\n"
-        "3. Career Mobility & Development (role changes, time in role)\n"
-        "4. Geographic & Organizational Distribution\n"
-        "5. Recommendations (3-5 actionable items)\n\n"
-        "Use specific numbers from the data. Keep it concise but insightful. "
-        "Use markdown formatting with headers."
-    )
+    if use_llm:
+        context = _build_report_context()
+        system = (
+            "You are a senior HR analytics consultant writing an executive summary for the CHRO. "
+            "Write a professional, data-driven executive summary covering:\n"
+            "1. Overall Workforce Health (headcount, turnover, tenure)\n"
+            "2. Key Risk Areas (high-turnover departments, tenure concerns)\n"
+            "3. Career Mobility & Development (role changes, time in role)\n"
+            "4. Geographic & Organizational Distribution\n"
+            "5. Recommendations (3-5 actionable items)\n\n"
+            "Use specific numbers from the data. Keep it concise but insightful. "
+            "Use markdown formatting with headers."
+        )
+        user_msg = f"Generate an executive workforce summary based on this data:\n\n{context}"
+        try:
+            summary = await _llm_call(system, user_msg)
+        except Exception as e:
+            # Fallback to local generation
+            summary = _generate_local_summary()
+    else:
+        summary = _generate_local_summary()
 
-    user_msg = f"Generate an executive workforce summary based on this data:\n\n{context}"
-
-    try:
-        summary = await _llm_call(system, user_msg)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
-
-    # Also compute key metrics to return alongside the narrative
     df = get_employees()
     total = len(df)
     active = int(df["is_active"].sum())
@@ -166,6 +235,7 @@ async def executive_summary():
         "avg_tenure_years": round(float(df["tenure_years"].mean()), 1),
         "median_tenure_years": round(float(df["tenure_years"].median()), 1),
         "generated_at": datetime.now().isoformat(),
+        "source": "llm" if use_llm else "local",
     }
 
     return {"summary": summary, "metrics": metrics}

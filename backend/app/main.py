@@ -16,6 +16,7 @@ from .routers import (
     chat,
     reports,
     upload,
+    settings,
     taxonomy_router,
     pipeline_router,
     ws,
@@ -94,6 +95,7 @@ app.include_router(predictions.router, prefix="/api/predictions", tags=["Predict
 app.include_router(chat.router, prefix="/api/chat", tags=["AI Chat"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
+app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxonomy"])
 app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(ws.router, tags=["WebSocket"])

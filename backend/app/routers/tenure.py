@@ -81,22 +81,16 @@ def tenure_cohorts():
 @router.get("/distribution")
 def tenure_distribution():
     df = get_employees()
-    max_tenure = int(df["tenure_years"].max()) + 1 if len(df) > 0 else 11
-    bin_edges = list(range(0, min(max_tenure, 11))) + [float("inf")]
-    bin_labels = [f"{i}-{i+1}" for i in range(0, min(max_tenure, 10))]
-    if max_tenure > 10:
-        bin_labels[-1] = "10+"
-        bin_edges = list(range(0, 11)) + [float("inf")]
-        bin_labels = [f"{i}-{i+1}" for i in range(0, 10)] + ["10+"]
-    else:
-        bin_labels = [f"{i}-{i+1}" for i in range(0, len(bin_edges) - 1)]
-    # Simplified fixed bins
-    bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, float("inf")]
-    labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6-7", "7-8", "8-9", "9-10", "10+"]
+    if len(df) == 0:
+        return {"data": [], "total": 0, "median_tenure_years": 0}
+    # Meaningful HR bins: early-attrition visible + career stages
+    bins = [0, 0.5, 1, 2, 3, 5, 10, float("inf")]
+    labels = ["0-6mo", "6-12mo", "1-2yr", "2-3yr", "3-5yr", "5-10yr", "10yr+"]
     df["tenure_bin"] = pd.cut(df["tenure_years"], bins=bins, labels=labels, right=False)
     counts = df["tenure_bin"].value_counts().reindex(labels, fill_value=0)
     result = [{"bin": label, "count": int(counts[label])} for label in labels]
-    return {"data": result, "total": len(df)}
+    median_tenure = round(float(df["tenure_years"].median()), 1)
+    return {"data": result, "total": len(df), "median_tenure_years": median_tenure}
 
 
 @router.get("/long-tenured")

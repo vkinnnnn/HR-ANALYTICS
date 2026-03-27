@@ -11,15 +11,32 @@ def workforce_summary():
     active = df[df["is_active"]]
     departed = df[~df["is_active"]]
     today = pd.Timestamp.now()
+
+    # New hires in last 90 days
+    ninety_days_ago = today - pd.Timedelta(days=90)
+    new_hires_90d = int(df[df["Hire"] >= ninety_days_ago].shape[0]) if "Hire" in df.columns else 0
+
+    # Quarter-based metrics
     this_quarter_start = today - pd.offsets.QuarterBegin(startingMonth=1)
     new_hires_qtr = int(active[active["Hire"] >= this_quarter_start].shape[0]) if "Hire" in df.columns else 0
     departures_qtr = int(departed[departed["Expire"] >= this_quarter_start].shape[0]) if departed["Expire"].notna().any() else 0
+
+    # Prior period comparisons (current vs prior 90-day window)
+    prior_start = ninety_days_ago - pd.Timedelta(days=90)
+    prior_hires = int(df[(df["Hire"] >= prior_start) & (df["Hire"] < ninety_days_ago)].shape[0]) if "Hire" in df.columns else 0
+
+    # Turnover rate — active employees who departed / total for the dataset
+    turnover_rate = round(len(departed) / len(df) * 100, 1) if len(df) > 0 else 0
+    avg_tenure = round(float(active["tenure_years"].mean()), 1) if len(active) > 0 else 0
+
     return {
         "total_headcount": len(df),
         "active": int(active.shape[0]),
         "departed": int(departed.shape[0]),
-        "turnover_rate": round(len(departed) / len(df) * 100, 1) if len(df) > 0 else 0,
-        "avg_tenure_years": round(float(active["tenure_years"].mean()), 1) if len(active) > 0 else 0,
+        "turnover_rate": turnover_rate,
+        "avg_tenure_years": avg_tenure,
+        "new_hires_90d": new_hires_90d,
+        "prior_hires_90d": prior_hires,
         "new_hires_this_quarter": new_hires_qtr,
         "departures_this_quarter": departures_qtr,
         "unique_departments": int(df["department_name"].nunique()),

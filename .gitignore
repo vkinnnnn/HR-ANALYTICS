@@ -3,6 +3,10 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Secrets
+.env
+backend/.env
+
 # Build
 frontend/dist/
 *.db
@@ -33,3 +37,7 @@ Thumbs.db
 
 # Pipeline artifacts
 checkpoints/
+
+# OpenMemory - IDE/Assistant specific rules
+.cursor\rules\openmemory.mdc
+CLAUDE.md
