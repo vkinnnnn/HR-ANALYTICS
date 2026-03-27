@@ -1,331 +1,247 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Session 10: Dashboard visual overhaul + AI chatbot panel.
+2026-03-27 — Session 10 complete: Dashboard overhaul, fire orb AI assistant, deep analysis chatbot, multi-LLM, pipeline fix.
 
 ---
 
 ## Session History (Reverse Chronological)
 
-### Session 10 — Dashboard Visual Overhaul + AI Chatbot Panel
+### Session 10 — Complete UI/UX Overhaul + AI Assistant Rebuild
 
-**Steps Completed:**
+**Scope:** 6 sub-sessions covering dashboard redesign, AI chatbot rebuild, multi-LLM support, and deep analysis engine.
 
-1. **Ambient Background** — Verified AmbientBackground.tsx rendering in App.tsx (was already correct)
-2. **PageHero Component** — Rewrote to match design spec: 40x40 gradient icon, 24px/800w title, 13px subtitle at ml-52, 48px orange underline at ml-52 opacity 0.5
-3. **Dashboard KPI Cards** — Replaced 5-column generic KPIs with 4 specific cards: Total Headcount (orange), Turnover Rate (rose), Avg Tenure (purple), New Hires 90d (emerald). Glass panel, animated numbers, stagger fadeUp, change indicators
-4. **AI Insight Banner** — Added data-driven InsightBanner between KPIs and charts. Reads highest turnover dept + top flight risk employees from live data
-5. **Chart Panels** — All 4 panels: glass morphism (rgba bg, blur-20, border-subtle, rounded-xl, box-shadow), SectionHeader with 30x30 icon containers, Badge actions
-6. **Turnover Chart** — Two-color system (rose above avg, emerald at/below), dashed ReferenceLine at company average, bar size 14px radius [0,4,4,0], click-to-chat integration
-7. **Tenure Distribution** — Changed backend bins to: 0-6mo, 6-12mo, 1-2yr, 2-3yr, 3-5yr, 5-10yr, 10yr+. Rose for first 2 (early attrition), purple for rest. Added median_tenure_years to API
-8. **Flight Risk Table** — Filtered NaN job titles, EMP-{id} fallback, colored risk badges (rose 80%+, amber 60-80%), CSS Grid rows with glass styling, "Take Action" ghost buttons
-9. **ChartTooltip** — Glass morphism: rgba(19,19,24,0.95), blur-16, border-medium, rounded-12, 12px/40px box-shadow, 10px/700w uppercase labels with colored dots
-10. **Glass Panel CSS** — Added box-shadow: 0 1px 3px rgba(0,0,0,0.3) to .glass-panel class
-11. **SectionHeader fix** — Subtitle: 11px (was 12px), color #52525b (was #71717a) per spec
-12. **Backend workforce/summary** — Added new_hires_90d, prior_hires_90d fields
-13. **AI Chatbot Panel** — Built complete slide-out panel system:
-    - ChatTrigger.tsx: Fixed bottom-right pill, gradient orange, glow shadow, Sparkles icon
-    - ChatPanel.tsx: 420px slide-out, glass bg (blur-24), slide animation 280ms
-    - Header: "AI Assistant" + GPT-4o-mini badge + close button
-    - Messages: user (orange-tinted, right) / assistant (glass, left), markdown rendering
-    - MiniChart: inline bar/line/pie rendering in AI message bubbles
-    - Typing indicator: 3-dot staggered pulse
-    - Suggested prompts: page-aware pills (dashboard/turnover/careers/managers/tenure/flight-risk)
-    - Input: auto-resize textarea, gradient send button, Enter=send Shift+Enter=newline
-    - Context-awareness: sends current_page to backend
-    - Chart-click integration: clicking turnover bar auto-opens chat with prefilled question
-14. **App.tsx rewrite** — Chat state at App level (persists across navigation), margin-right transition (content compresses, not obscured), ChatTrigger on every page
-15. **Backend chat.py** — Enhanced to accept current_page + filters, adds page context to LLM prompt
+#### 10a — Dashboard Visual Overhaul
+- Rewrote PageHero component (gradient icon, subtitle at ml-52, orange underline)
+- 4 KPI cards: Total Headcount (orange), Turnover Rate (rose), Avg Tenure (purple), New Hires 90d (emerald)
+- AI Insight banner between KPIs and charts (data-driven anomaly text)
+- Turnover chart: two-color system (rose above avg, emerald below) + dashed reference line
+- Tenure distribution: 7 meaningful bins (0-6mo through 10yr+), rose for early-attrition
+- Flight risk table: NaN→"Untitled Role", colored risk badges, CSS Grid, "Take Action" buttons
+- Glass morphism: box-shadow added to .glass-panel, ChartTooltip with blur+shadow
+- Backend: new_hires_90d, prior_hires_90d in workforce/summary; meaningful tenure bins + median
 
-**Files Modified:**
-- `frontend/src/App.tsx` — full rewrite
+#### 10b — Multi-LLM Support + Settings
+- Created `backend/app/llm.py` — unified LLM client (OpenRouter + OpenAI)
+- `llm_call()` for chat (user-selected model), `llm_call_premium()` for reports (GPT-4o)
+- OpenRouter default: `nvidia/nemotron-3-super-120b-a12b:free`
+- Both OpenAI + OpenRouter API keys configured in `backend/.env`
+- Settings router: GET/POST `/api/settings/llm` for runtime model switching
+- Settings page: live provider/model picker, key status indicators, 8+ models
+- Local fallback for chat + reports when no API key
+- Reports use GPT-4o via OpenAI for premium quality
+- Registered settings router in main.py
+- Complete README rewrite
+
+#### 10c — Fire Orb AI Assistant Identity
+- **Product vision:** "Workforce IQ" — Bloomberg Terminal for people data
+- Fire orb PNGs: `public/assets/fire-orb-{lg,md,sm}.png` from Figma exports
+- CSS fallback: `.fire-orb-fallback` radial-gradient orb
+- ChatTrigger: 56x56 fire orb circle with `orbGlow` pulse animation, notification badge
+- Removed AI Chatbot page from sidebar nav + routes
+- ChatPanel complete rebuild:
+  - Header: fire-orb-sm + "Workforce AI" + dynamic model badge + Clear + Close
+  - Empty state: 120px fire orb, welcome text, 2x2 starter prompt cards
+  - Messages: fire-orb-sm avatar on AI messages, timestamp separators
+  - System messages for proactive alerts (orange-tinted cards)
+  - Typing: 3-dot `dotBounce` animation with fire orb avatar
+  - Inline charts with highlight support
+  - Input: 14px radius, focus glow ring, Escape to close
+- App.tsx: proactive insights (danger zones + flight risk check on load), model name from settings API
+
+#### 10d — Deep Analysis Chatbot Engine
+- Backend chat.py complete rewrite with 16+ data sections in context:
+  - Department stats (6 metrics each for 15 depts)
+  - Flight risk top 10 with individual factors
+  - Manager metrics (total/avg/max span, overhead, overload)
+  - Career mobility (role changes, title changes, stuck 3yr+/5yr+)
+  - Grade band + grade title distributions
+  - Tenure distribution (7 bins)
+  - Country/function/business unit breakdowns
+  - **Hire cohort retention** (last 5 years: hired → retained → %)
+  - **Manager retention analysis** (worst/best managers by report retention)
+  - **Cross-metric correlations** (manager changes→departures, stagnation→churn, promotions→retention)
+  - **Org structure** (manager-to-employee ratio)
+  - Anomaly detection (100% churn depts, early attrition, no recent hires)
+  - Page-specific context (varies by current page)
+- Senior analyst system prompt with:
+  - Industry benchmark comparisons (turnover 15-20%, tenure 4.1yr, span 5-8)
+  - Metric definitions on demand
+  - Root cause analysis, not just symptoms
+  - Ambiguity resolution (notes assumptions)
+  - Data storytelling structure (headline → changes → risks → actions)
+- Multi-turn conversation (last 6 turns sent as history)
+- Analysis type classification (comparative, trend, root_cause, predictive, risk, recommendation)
+- Follow-up suggestions parsed from AI response, rendered as orange pills
+- Rich local fallback with charts + suggestions for offline mode
+- Frontend: conversation history in API calls, suggestion pills below AI messages
+
+#### 10e — Turnover Two-Color Fix
+- Bug: `companyAvgTurnover` computed from top-10 slice (all ~100%), making all bars emerald
+- Fix: now uses `summary.turnover_rate` (55.0%) from company-wide data
+
+#### 10f — Pipeline Fix
+- `pipeline_runners.py` report_generate used old direct OpenAI call
+- Fixed: now uses unified `llm.py` via `reports._llm_call` → `llm_call_premium`
+- Added local summary fallback so pipeline never fails due to missing keys
+- Stale `__pycache__` on Windows was root cause of "OPENAI_API_KEY not set" error
+
+**All Files Created/Modified in Session 10:**
+- `frontend/src/App.tsx` — full rewrite (3 times)
 - `frontend/src/pages/Dashboard.tsx` — full rewrite
+- `frontend/src/pages/SettingsPage.tsx` — full rewrite
+- `frontend/src/components/chat/ChatTrigger.tsx` — NEW, then rewrite (fire orb)
+- `frontend/src/components/chat/ChatPanel.tsx` — NEW, then 2 rewrites
 - `frontend/src/components/ui/PageHero.tsx` — rewrite
-- `frontend/src/components/ui/KpiCard.tsx` — rewrite (format, suffix, change props)
-- `frontend/src/components/ui/AnimatedNumber.tsx` — rewrite (decimal format)
-- `frontend/src/components/ui/InsightBanner.tsx` — rewrite (title prop)
-- `frontend/src/components/ui/SectionHeader.tsx` — subtitle fix
-- `frontend/src/components/charts/ChartTooltip.tsx` — rewrite (glass spec)
-- `frontend/src/components/chat/ChatTrigger.tsx` — NEW
-- `frontend/src/components/chat/ChatPanel.tsx` — NEW
-- `frontend/src/index.css` — box-shadow on .glass-panel
-- `backend/app/routers/workforce.py` — new_hires_90d, prior_hires_90d
-- `backend/app/routers/tenure.py` — meaningful bins, median_tenure_years
-- `backend/app/routers/chat.py` — current_page, filters context
+- `frontend/src/components/ui/KpiCard.tsx` — rewrite
+- `frontend/src/components/ui/AnimatedNumber.tsx` — rewrite
+- `frontend/src/components/ui/InsightBanner.tsx` — rewrite
+- `frontend/src/components/ui/SectionHeader.tsx` — fix
+- `frontend/src/components/charts/ChartTooltip.tsx` — rewrite
+- `frontend/src/components/layout/Sidebar.tsx` — removed AI Chatbot
+- `frontend/src/index.css` — orbGlow, dotBounce, fire-orb-fallback, box-shadow
+- `frontend/src/lib/api.ts` — port update (8000→8003)
+- `frontend/public/assets/fire-orb-{lg,md,sm}.png` — NEW
+- `backend/app/llm.py` — NEW (unified LLM client)
+- `backend/app/config.py` — OpenRouter settings added
+- `backend/app/main.py` — settings router registered
+- `backend/app/routers/chat.py` — 3 rewrites (deep analysis engine)
+- `backend/app/routers/reports.py` — unified LLM + local fallback
+- `backend/app/routers/settings.py` — NEW
+- `backend/app/routers/workforce.py` — new_hires_90d
+- `backend/app/routers/tenure.py` — meaningful bins + median
+- `backend/app/services/pipeline_runners.py` — unified LLM + fallback
+- `backend/.env` — NEW (OpenRouter + OpenAI keys, gitignored)
+- `.gitignore` — .env, backend/.env
+- `.mcp.json` — removed stitch, added figma
+- `README.md` — complete rewrite
+- `openmemory.md` — this file
 
-16. **Settings Router** — NEW `backend/app/routers/settings.py`: GET/POST `/api/settings/llm` for runtime LLM switching
-17. **Settings Page** — Full rewrite: live provider/model picker (OpenRouter/OpenAI), 8 models listed, radio-style selection, "Apply Changes" button
-18. **Unified LLM Client** — NEW `backend/app/llm.py`: shared client for OpenRouter + OpenAI, used by chat.py and reports.py
-19. **OpenRouter Integration** — Default provider: Nvidia Nemotron 120B (free). `.env` with OPENROUTER_API_KEY
-20. **Local Chat Fallback** — chat.py pattern-matches questions (turnover, tenure, headcount, department) when no API key
-21. **Local Report Fallback** — reports.py generates data-driven executive summary without LLM
-22. **README** — Complete rewrite with setup guide, architecture, all 14 pages, API reference, env vars
-
-### Session 10b — Product Vision: Fire Orb AI Assistant
-
-**Product vision:** "Workforce IQ" — Bloomberg Terminal for people data. Serious, premium, data-dense.
-
-**Fire Orb Identity:**
-- 3D glossy black glass orb with orange flame = AI assistant visual identity
-- PNGs from Figma: `public/assets/fire-orb-{lg,md,sm}.png` (120, 48, 28px)
-- CSS fallback: radial-gradient orb with warm inner glow
-- Pulsing glow animation: `orbGlow 3s ease-in-out infinite`
-
-**AI Side Panel Rebuild (replaced entire chatbot system):**
-1. **Removed AI Chatbot page** — deleted from sidebar nav + routes, no longer a page
-2. **Fire orb trigger** — 56x56 circle (not pill), fire-orb-md.png, orbGlow animation, notification badge
-3. **ChatPanel complete rebuild:**
-   - Header: 60px, fire-orb-sm + "Workforce AI" + model badge from settings API + Clear + Close
-   - Empty state: large fire orb (120px), welcome text, 2x2 starter prompt cards
-   - Messages: AI avatar (fire-orb-sm), user right/AI left with spec border-radius, timestamp separators
-   - System messages: proactive insight alerts in orange-tinted card
-   - Typing indicator: 3 dots with dotBounce animation + fire orb avatar
-   - Inline charts: mini area/bar/pie with highlight support, inside message bubbles
-   - Input: 14px radius, focus glow ring, 34px send button, Enter/Shift+Enter
-   - Escape to close
-4. **Proactive insights:** App checks danger-zones + flight-risk on load, shows notification badge, pre-loads system message
-5. **Context awareness:** page-specific suggested prompts for all 7+ page types, chart-click auto-ask
-6. **Model name:** fetched from `/api/settings/llm`, displayed in header badge
-
-**Turnover two-color fix:**
-- Bug: companyAvgTurnover was computed from top-10 slice (all ~100%), making all bars emerald
-- Fix: now uses `summary.turnover_rate` (55.0%) from company-wide data → proper rose/emerald split
-
-**NaN display fix:** Changed fallback from "EMP-{id}" to "Untitled Role"
-
-**CSS additions:** `orbGlow`, `dotBounce`, `.fire-orb-fallback` keyframes/class
-
-**Files created/modified:**
-- `frontend/public/assets/fire-orb-{lg,md,sm}.png` — NEW (copied from Figma exports)
-- `frontend/src/components/chat/ChatTrigger.tsx` — full rewrite (fire orb)
-- `frontend/src/components/chat/ChatPanel.tsx` — full rewrite (complete spec)
-- `frontend/src/components/layout/Sidebar.tsx` — removed AI Chatbot nav item
-- `frontend/src/App.tsx` — full rewrite (proactive insights, model name, removed /chat route)
-- `frontend/src/pages/Dashboard.tsx` — turnover avg fix, NaN→Untitled Role
-- `frontend/src/index.css` — orbGlow, dotBounce, fire-orb-fallback
-
-### Session 10c — Deep Analysis Chatbot Engine
-
-**Backend chat.py complete rewrite:**
-1. **Deep context builder** — comprehensive data context with:
-   - Department stats (active/departed/turnover/avg tenure/avg role changes/time in role per dept)
-   - Flight risk top 10 with scores, tenure, time in role
-   - Manager metrics (total, avg/max span, overhead, overload counts)
-   - Career mobility (role changes, title changes, stuck 3yr+/5yr+ counts)
-   - Grade band + grade title distributions
-   - Tenure distribution in meaningful bins
-   - Country/function family/business unit breakdowns
-   - Auto-detected anomalies (100% turnover depts, early attrition, no recent hires)
-   - Page-specific deep context (turnover trends, promotion data, manager spans)
-
-2. **Senior analyst system prompt** — "Workforce AI" acts as senior People Analytics consultant:
-   - Leads with specific numbers, compares to industry benchmarks
-   - Identifies root causes not just symptoms
-   - Provides actionable recommendations
-   - Always suggests follow-up analyses (SUGGESTIONS: format)
-
-3. **Multi-turn conversation** — sends last 6 turns as conversation_history to LLM for context continuity
-
-4. **Analysis type detection** — classifies queries as: comparative, trend, root_cause, predictive, risk, recommendation, descriptive
-
-5. **Follow-up suggestions** — AI returns 2-3 follow-up questions parsed from response, rendered as clickable orange pills below each AI message
-
-6. **Rich local fallback** — pattern-matching for turnover, tenure, headcount, risk, stuck employees, department-specific queries — all with chart data and suggestions
-
-**Frontend ChatPanel updates:**
-- ChatMessage type: added `suggestions`, `analysis_type` fields
-- sendMessage: includes `conversation_history` in API call
-- Follow-up suggestion pills: rendered below AI messages, clickable to auto-send
-
-**Known Issues:**
-- new_hires_90d = 0 because dataset is historical (no hires in last 90 days). This is correct data behavior.
-- Port 8000 had zombie processes on Windows; running on port 8003
+**Git Commits (Session 10):**
+- `75c0db6` — feat: dashboard overhaul, AI chatbot panel, multi-LLM settings
+- `4db27cd` — feat: fire orb AI assistant — product vision rebuild
+- `54772d5` — feat: OpenAI + OpenRouter dual-key setup, GPT-4o for reports
+- `8a8cd33` — feat: deep analysis chatbot — multi-turn, root cause, follow-up suggestions
+- `697af32` — feat: advanced analytics — cohort retention, manager deep dive, correlations
+- `352aa84` — fix: pipeline report_generate — use unified LLM with local fallback
 
 ### Session 9 — MCP + Skills Ecosystem
-- Added Memory MCP (`@modelcontextprotocol/server-memory`) — persistent knowledge graph at `.mcp-data/memory/`
-- Added Context7 MCP (`@upstash/context7-mcp`) — real-time library docs lookup
-- Added GitHub MCP (`@modelcontextprotocol/server-github`) — issues/PRs/commits via PAT
-- Extracted 2 local skills into `.claude/skills/`: gh-issues, skill-lookup
-- GITHUB_TOKEN in gitignored `.claude/settings.local.json`, referenced via `${GITHUB_TOKEN}` in `.mcp.json`
-- Created `docs/mcp-integration.md` — full architecture, config, troubleshooting
+- Memory MCP, Context7 MCP, GitHub MCP, 2 local skills
 - Commit: `4649d3f`
 
-### Session 8 — Production Infrastructure (ARQ, Auth, WebSocket, Scheduler, Sentry)
-- ARQ + Redis job queue with thread fallback (`job_queue.py`, `worker.py`)
-- Firebase Auth middleware with graceful no-auth mode (`auth.py`)
-- WebSocket log streaming `/ws/pipeline/{id}/logs` + `/ws/pipeline/all` (`ws.py`)
-- APScheduler cron scheduling + dependency chains (`scheduler.py`)
-- `POST /api/pipeline/chain` — chained runs (data_reload → taxonomy → ML)
-- `GET /api/pipeline/schedules` + `/health` endpoints
-- Sentry SDK in lifespan (if `SENTRY_DSN` set)
-- GitHub Actions: daily cron + test CI (`.github/workflows/`)
-- PipelineHub frontend: WebSocket with polling fallback
+### Session 8 — Production Infrastructure
+- ARQ + Redis, Firebase Auth, WebSocket, APScheduler, Sentry, GitHub Actions
 - Commit: `a3448fe`
 
-### Session 7 — Pipeline Orchestration (Phases B-G from Regata3010)
-- Analyzed friend's repo (Regata3010/HR-Analytics) pipeline patterns
-- Extended PipelineRun model: progress, cancellation, PipelineArtifact table
-- Built `batch_processor.py`: configurable batch_size/workers/retries/checkpoints/resume
-- Built `run_manager.py`: async lifecycle, log append, artifact registry, cancel flags
-- Built `pipeline_router.py`: 7 endpoints (start, runs, detail, log, cancel, download, types)
-- Built 5 pipeline runners: data_reload, taxonomy_regen, flight_risk_train, report_generate, export_bundle
-- Built `PipelineHub.tsx` frontend page
-- 28 tests passing (12 batch + 9 lifecycle + 7 API)
-- `docs/pipeline-migration.md` — source→local capability mapping
+### Session 7 — Pipeline Orchestration
+- PipelineRun model, batch_processor, run_manager, 5 runners, PipelineHub
 - Commit: `7679f9d`
 
-### Session 6 — Fix Page Crashes (Tenure, Turnover, Careers, Org, Upload)
-- All 5 pages crashed due to frontend interface field names mismatching actual API responses
-- Fixed Tenure (7 fields), Turnover (summary+trend+danger), Careers (PK_PERSON+paths+velocity), Org (growth pivot+restructuring), Upload (status fields)
+### Session 6 — Fix Page Crashes
 - Commit: `3334c5c`
 
-### Session 5 — Comprehensive Frontend-API Alignment (18 Mismatches)
-- Audited all 13 pages vs actual API — found 18 mismatches across 7 pages
-- Fixed: Careers (3), Managers (3), Org (2), Tenure (4), Turnover (1), Dashboard (1), FlightRisk (4)
+### Session 5 — Frontend-API Alignment (18 Mismatches)
 - Commit: `93775aa`
 
-### Session 4 — Bug Fixes + Taxonomy-Enriched Dimensions
-- Fixed 3 broken endpoints: careers/stuck-employees, chat/query (OpenAI proxies), org/restructuring
-- Added 5 workforce + 3 turnover taxonomy-enriched endpoints (by-grade-band, by-function-family, by-job-family, by-seniority, by-grade-track)
-- Updated Workforce page with 8 dimension tabs + normalized data parsing
+### Session 4 — Bug Fixes + Taxonomy Dimensions
 - Commit: `4688c76`
 
-### Session 3 — Precise Data-Driven Taxonomy
-- Deep analysis: 25 grades, 151 functions, 869 titles, 3,297 career transitions
-- Rebuilt `taxonomy.py` — Workhuman-specific grade hierarchy (P1-P6, M1-M6, S1-S5, E1-E2, EXEC, C-Suite, CEO)
-- 12 function families via regex, job title seniority + family classifiers
-- Career move classifier: multi-signal (grade + title level + family + overlap)
-- Taxonomy auto-runs on data load, adds 7 enrichment columns
-- Built `/api/taxonomy` router (6 endpoints) + rebuilt Insights page with real charts
+### Session 3 — Deterministic Taxonomy Engine
 - Commit: `5ef279d`
 
-### Session 2 — Cleanup, Types Fix, Git Init
-- Replaced old recognition types/api.ts with workforce interfaces
-- Cleaned stale recognition-era files (create_taxonomy.py, run_topic_annotation.py, backend/pipeline/)
-- Initialized git, first commit, push to GitHub (vkinnnnn/HR-ANALYTICS)
-- Commit: `fef37a6`, `8539953`
+### Session 2 — Cleanup, Types, Git Init
+- Commits: `fef37a6`, `8539953`
 
 ### Session 1 — Full Platform Build + Pivot
-- Built original Recognition IQ (12 routers + 14 pages) from project docs
-- Deployed to Firebase Hosting + Cloud Run
-- **PIVOTED** to Workforce Analytics when real dataset arrived (wh_Dataset/)
-- Rebuilt entire backend (11 routers) + frontend (13 pages) for workforce domain
-- Verified: 2,466 employees, 1,110 active, 1,356 departed, 11,803 history records
+- Built Recognition IQ → pivoted to Workforce Analytics
 - Initial commit: `965cc63`
 
 ---
 
-## Current State
+## Current State (Post-Session 10)
 
-### What's Built & Working
+### Backend — 14 routers, 90+ endpoints
+| Router | File | Key Features |
+|--------|------|-------------|
+| Workforce | workforce.py | 16 endpoints, new_hires_90d |
+| Turnover | turnover.py | 11 endpoints, meaningful bins |
+| Tenure | tenure.py | 8 endpoints, median_tenure_years |
+| Careers | careers.py | 6 endpoints |
+| Managers | managers.py | 6 endpoints |
+| Org | org.py | 6 endpoints |
+| Predictions | predictions.py | 4 endpoints (flight risk ML) |
+| Chat | chat.py | Deep analysis engine, multi-turn, 16 data sections |
+| Reports | reports.py | GPT-4o premium + local fallback |
+| Upload | upload.py | 3 endpoints |
+| **Settings** | **settings.py** | **GET/POST LLM config, runtime model switching** |
+| Taxonomy | taxonomy_router.py | 6 endpoints |
+| Pipeline | pipeline_router.py | 11 endpoints |
+| WebSocket | ws.py | 2 WS endpoints |
 
-**Backend — 85 API routes on Cloud Run:**
+### Shared Modules
+| Module | Purpose |
+|--------|---------|
+| `llm.py` | Unified LLM client (OpenRouter/OpenAI), `llm_call()` + `llm_call_premium()` |
+| `config.py` | Pydantic settings with OpenRouter + OpenAI + Bedrock support |
+| `data_loader.py` | CSV load → join → enrich → taxonomy → cache |
+| `taxonomy.py` | Deterministic grade/function/title/career classifier |
 
-| Area | File | Endpoints | Status |
-|---|---|---|---|
-| Core | main.py | Lifespan, CORS, 13 routers + WS | ✅ |
-| Config | config.py | All env vars (LLM, pipeline, batch, auth) | ✅ |
-| Database | database.py | PipelineRun + PipelineArtifact models | ✅ |
-| Data | data_loader.py | CSV load, join, enrich, taxonomy, cache | ✅ |
-| Taxonomy | taxonomy.py | Grade/function/title/career move classifier | ✅ |
-| Workforce | routers/workforce.py | 16 endpoints (incl. taxonomy dimensions) | ✅ |
-| Turnover | routers/turnover.py | 11 endpoints (incl. taxonomy breakdowns) | ✅ |
-| Tenure | routers/tenure.py | 8 endpoints | ✅ |
-| Careers | routers/careers.py | 6 endpoints | ✅ |
-| Managers | routers/managers.py | 6 endpoints | ✅ |
-| Org | routers/org.py | 6 endpoints | ✅ |
-| Predictions | routers/predictions.py | 4 endpoints (flight risk ML) | ✅ |
-| Taxonomy API | routers/taxonomy_router.py | 6 endpoints | ✅ |
-| Chat | routers/chat.py | 1 endpoint (LLM) | ✅ (needs valid key) |
-| Reports | routers/reports.py | 2 endpoints (LLM + ZIP) | ✅ (needs valid key) |
-| Upload | routers/upload.py | 3 endpoints | ✅ |
-| Pipeline | routers/pipeline_router.py | 11 endpoints (start, runs, chain, health, schedules) | ✅ |
-| WebSocket | routers/ws.py | 2 WS endpoints (per-run logs, all-runs) | ✅ |
-| Services | services/batch_processor.py | Generic batch processing utility | ✅ |
-| Services | services/run_manager.py | Run lifecycle, logs, artifacts, cancel | ✅ |
-| Services | services/pipeline_runners.py | 5 runner implementations | ✅ |
-| Services | services/job_queue.py | ARQ + Redis with thread fallback | ✅ |
-| Services | services/scheduler.py | APScheduler cron + dependency chains | ✅ |
-| Services | services/auth.py | Firebase Auth middleware | ✅ |
-| Worker | worker.py | ARQ worker process config | ✅ |
-| Tests | tests/ | 28 tests (batch, lifecycle, API) | ✅ All passing |
-
-**Frontend — 14 pages on Firebase Hosting:**
-
+### Frontend — 13 pages + fire orb AI panel
 | Page | Route | Status |
-|---|---|---|
-| Dashboard | `/` | ✅ Working |
-| Workforce | `/workforce` | ✅ Working (8 dimension tabs) |
-| Turnover | `/turnover` | ✅ Working |
-| Tenure | `/tenure` | ✅ Working |
-| Flight Risk | `/flight-risk` | ✅ Working |
-| Careers | `/careers` | ✅ Working |
-| Managers | `/managers` | ✅ Working |
-| Org Structure | `/org` | ✅ Working |
-| AI Chatbot | `/chat` | ✅ Working (needs LLM key) |
-| AI Insights | `/insights` | ✅ Working (real taxonomy data) |
-| Pipeline Hub | `/pipeline` | ✅ Working (WebSocket + polling) |
-| Data Upload | `/upload` | ✅ Working |
-| Reports | `/reports` | ✅ Working (needs LLM key) |
-| Settings | `/settings` | ✅ Read-only |
+|------|-------|--------|
+| Dashboard | `/` | Full redesign: 4 KPIs, insight banner, two-color turnover, glass panels |
+| Workforce | `/workforce` | 8 dimension tabs |
+| Turnover | `/turnover` | Rates + trend + danger zones |
+| Tenure | `/tenure` | Cohorts + retention curve |
+| Flight Risk | `/flight-risk` | ML scores + features |
+| Careers | `/careers` | Velocity + stuck + paths |
+| Managers | `/managers` | Span + retention + revolving doors |
+| Org Structure | `/org` | Dept sizes + growth + restructuring |
+| AI Insights | `/insights` | Taxonomy charts |
+| Pipeline Hub | `/pipeline` | Launch/monitor/cancel |
+| Upload | `/upload` | Drag-drop CSV |
+| Reports | `/reports` | LLM summary + export ZIP |
+| **Settings** | `/settings` | **Live LLM provider/model picker** |
+| ~~AI Chatbot~~ | ~~`/chat`~~ | **REMOVED — replaced by fire orb side panel** |
 
-**Infrastructure:**
+### AI Assistant (Fire Orb)
+- Fire orb trigger: 56px circle, bottom-right, glow pulse animation
+- 420px slide-out panel, content compresses (not obscured)
+- "Workforce AI" header with dynamic model badge
+- Empty state: 120px orb, welcome text, 2x2 starter cards
+- Multi-turn conversations (6-turn history)
+- Deep analysis: 16 data sections, benchmarking, root cause, cohort, correlations
+- Inline charts in AI messages
+- Follow-up suggestion pills
+- Proactive anomaly detection on app load
+- Chart-click → auto-ask integration
+- Escape to close, chat persists across navigation
 
-| Component | URL/Location | Status |
-|---|---|---|
-| Frontend | https://hr-analytics-f23c0.web.app | ✅ Live |
-| Backend | https://hr-analytics-backend-88806953030.us-central1.run.app | ✅ Live |
-| API Docs | .../docs (Swagger UI) | ✅ Live |
-| GitHub | https://github.com/vkinnnnn/HR-ANALYTICS | ✅ 10+ commits on main |
-| Firebase Project | hr-analytics-f23c0 | ✅ Billing linked |
-| Cloud Run Region | us-central1 | ✅ |
-| GCloud Account | vkinnnnn@gmail.com | ✅ |
-| Billing Account | 01BFD0-079732-2ED266 | ✅ |
+### LLM Configuration
+| Feature | Provider | Model |
+|---------|----------|-------|
+| Chat | OpenRouter (default) | nvidia/nemotron-3-super-120b-a12b:free |
+| Reports | OpenAI (always) | gpt-4o |
+| Fallback | Local | Data-driven pattern matching |
+| Switching | Settings page | Runtime, no restart needed |
 
-**MCP Ecosystem (4 servers + 2 skills):**
-
-| Server | Package | Purpose | Status |
-|---|---|---|---|
-| Stitch | `github:davideast/stitch-mcp` | Google Gemini AI | ✅ |
-| Memory | `@modelcontextprotocol/server-memory` | Persistent knowledge graph | ✅ |
-| Context7 | `@upstash/context7-mcp` | Library docs lookup | ✅ |
-| GitHub | `@modelcontextprotocol/server-github` | Issues/PRs/commits | ✅ |
-
-| Skill | Location | Purpose |
-|---|---|---|
-| gh-issues | `.claude/skills/gh-issues/` | Auto-fix GitHub issues |
-| skill-lookup | `.claude/skills/skill-lookup/` | Discover agent skills |
+### MCP Ecosystem
+| Server | Purpose | Status |
+|--------|---------|--------|
+| Memory | Persistent knowledge graph | Active |
+| Context7 | Library docs lookup | Active |
+| GitHub | Issues/PRs/commits | Active |
+| Figma | Design validation | Installed (needs OAuth) |
+| ~~Stitch~~ | ~~Google Gemini~~ | **Removed** (missing API key) |
 
 ---
 
-## What's NOT Built Yet / Remaining Work
+## Known Issues
 
-### High Priority
-- ❌ **Settings page write functionality** — currently read-only, needs forms for LLM config, thresholds
-- ❌ **PDF report generation** — Reports page generates text via LLM but no PDF download
-- ❌ **Synthetic data generation** — for features not in dataset (salary, performance, demographics, engagement)
-- ❌ **End-to-end page testing** — some pages may still have minor rendering issues with edge case data
-- ❌ **Code-splitting** — frontend bundle is 750KB, needs lazy loading for pages
-
-### Medium Priority
-- ❌ **Redis setup for production** — ARQ falls back to threads. Need Cloud Memorystore or Redis Cloud for persistent jobs
-- ❌ **Firebase Auth activation** — middleware exists but `FIREBASE_PROJECT_ID` not set on Cloud Run. Auth is in no-auth mode
-- ❌ **Sentry DSN configuration** — SDK wired but `SENTRY_DSN` not set. No error monitoring active
-- ❌ **Move Stitch GOOGLE_API_KEY to env var** — currently hardcoded in `.mcp.json`
-- ❌ **prompts.chat MCP server** — needed for skill-lookup skill to fully work
-- ❌ **Headcount trend optimization** — iterates every month since first hire, slow for large datasets
-
-### Low Priority / Nice-to-Have
-- ❌ **Project-specific skills** — create deploy, test-all, release skills
-- ❌ **Memory auto-backup cron** — periodic backup of .mcp-data/memory/
-- ❌ **WebSocket auth** — WS endpoints currently unauthenticated
-- ❌ **Celery migration** — replace thread-based jobs with Celery for true production queue
-- ❌ **Rate limiting** — no rate limits on API endpoints
-- ❌ **API versioning** — all endpoints at /api/ with no version prefix
-- ❌ **Dark mode toggle** — design system is dark-only, no light mode option
-- ❌ **Mobile responsive** — sidebar doesn't collapse on mobile
-- ❌ **i18n** — English only
-- ❌ **Accessibility audit** — no ARIA labels, keyboard nav needs work
+1. **Port 8000 zombie processes** — Windows doesn't release sockets. Backend runs on port 8003.
+2. **new_hires_90d = 0** — Dataset is historical, no hires in last 90 days. Correct behavior.
+3. **gcloud not in PATH** — Use full path for deployment commands.
+4. **Suggestions parsing** — Some models don't follow SUGGESTIONS: format consistently.
 
 ---
 
@@ -333,52 +249,14 @@
 
 1. **Workforce, not recognition** — permanent pivot from Session 1
 2. **CSV → pandas → in-memory cache** — no SQL for analytics, SQLite only for pipeline metadata
-3. **Data bundled in Docker** — wh_Dataset/ copied into image for Cloud Run
-4. **Dual deploy** — Firebase Hosting (static) + Cloud Run (API)
-5. **Deterministic taxonomy** — rule-based (Workhuman grade hierarchy), not LLM-dependent
-6. **Hybrid job queue** — ARQ+Redis when available, threads otherwise
-7. **Graceful degradation** — auth/sentry/redis all optional, app works without them
-8. **MCP tokens via env vars** — `${GITHUB_TOKEN}` ref in .mcp.json, actual value in gitignored settings.local.json
-9. **Design system preserved** — CodeRabbit dark theme with orange accent, Inter font
-
----
-
-## Known Issues & Bugs
-
-1. **Chat/Reports LLM** — OpenAI key (`sk-or-v1-...`) needs to be valid. May get 502 if expired
-2. **gcloud not in PATH** — must use full path: `/c/Users/chira/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd`
-3. **utcnow() deprecation** — SQLAlchemy model defaults use deprecated `datetime.utcnow()`. Cosmetic warnings in tests
-4. **Cloud Run cold starts** — first request after scale-to-zero takes 5-10s (data loading)
-5. **Bundle size** — 750KB JS bundle. Should code-split with dynamic imports
-6. **Some NaN values in job_title** — employees with no history show "nan" as job title in flight risk table
-
----
-
-## Do's and Don'ts
-
-### DO:
-- ✅ Update openmemory.md after EVERY task
-- ✅ Use FastAPI async lifespan (NOT @app.on_event)
-- ✅ Read CSVs with pandas, cache in `_data_cache` dict
-- ✅ Parse all dates explicitly, handle NaN/NaT
-- ✅ Use design tokens from docs/design-system.md
-- ✅ Use Recharts + custom ChartTooltip
-- ✅ Use CSS Grid for tables (not HTML `<table>`)
-- ✅ Stagger KPI animations by 60ms
-- ✅ Use `${ENV_VAR}` refs for secrets in .mcp.json
-- ✅ Keep .claude/settings.local.json gitignored
-- ✅ Run tests before deploying (`python -m pytest tests/ -v`)
-
-### DON'T:
-- ❌ NEVER build recognition/award analytics
-- ❌ NEVER store HR data in SQLite
-- ❌ NEVER hardcode colors in frontend
-- ❌ NEVER hardcode tokens in committed files
-- ❌ NEVER use default Recharts tooltip
-- ❌ NEVER use HTML `<table>`
-- ❌ NEVER assume demographics data exists
-- ❌ NEVER delete session history from this file
-- ❌ NEVER push env.yaml or settings.local.json to git
+3. **Unified LLM client** — `llm.py` is single source of truth for all LLM calls
+4. **OpenRouter default** — free tier for chat, OpenAI GPT-4o for premium reports
+5. **Fire orb, not page** — AI assistant is always-present side panel, not a navigation destination
+6. **Deep context, not RAG** — pre-compute 16 data sections per query, no vector search needed
+7. **Multi-turn via history** — send last 6 turns in API call, not server-side session storage
+8. **Local fallback everywhere** — chat, reports, pipeline all work without API keys
+9. **Deterministic taxonomy** — rule-based, not LLM-dependent
+10. **Design system preserved** — CodeRabbit dark theme, glass morphism, orange accent
 
 ---
 
@@ -386,190 +264,24 @@
 
 ### Dataset (Workhuman workforce data)
 | File | Rows | Key Columns |
-|---|---|---|
+|------|------|-------------|
 | function_wh.csv | 2,466 | PK_PERSON, Hire, Expire, job_title, grade_title, function_title, department_name, country |
 | wh_history_full.csv | 11,803 | pk_user, fk_direct_manager, job_title, effective_start_date, effective_end_date |
 | wh_user_history_v2.csv | 100 | pk_user, fk_direct_manager, job_title, position_title, dates |
 
 ### Key Stats
-- Total: 2,466 employees | Active: 1,110 (45%) | Departed: 1,356 (55%)
-- Avg tenure active: 5.5yr | Avg tenure departed: 2.5yr | Median departed: 1.4yr
-- 37 departments | 15 countries | 25 grades | 151 functions | 869 unique job titles
+- Total: 2,466 | Active: 1,110 (45%) | Departed: 1,356 (55%)
+- Turnover: 55.0% | Avg tenure: 3.9yr active | Median: 2.6yr
+- 37 departments | 15 countries | 25 grades | 151 functions | 869 job titles
 - 222 managers | Avg span: 2.92 | Max span: 13
-- 3,297 career moves: 1,113 promotions, 799 laterals, 541 transfers, 505 demotions, 339 restructures
+- 3,297 career moves classified
 
-### Grade Hierarchy (Workhuman-specific)
-```
-Support:      S1 → S2 → S3 → S4 → S5
-Professional: P1 → P2 → P3 → P4 → P5 → P6
-Management:   M1 → M2 → M3 → M4 → M5 → M6
-Executive:    E1 → E2 → EXEC → C-Suite → CEO
-Other:        Hourly, Salary, Contingent Workers
-```
-
-### Join Key
-`function_wh.PK_PERSON = wh_history_full.pk_user`
-
-### Active/Departed Rule
-- Active: `Expire IS NULL` or `Expire > today`
-- Departed: `Expire IS NOT NULL` and `Expire <= today`
-
----
-
-## Environment Variables Reference
-
-### Cloud Run (backend/env.yaml — gitignored)
-| Variable | Value | Purpose |
-|---|---|---|
-| CORS_ORIGINS | Firebase URLs | CORS whitelist |
-| DATABASE_URL | sqlite+aiosqlite:///./hr_platform.db | Pipeline metadata DB |
-| DATA_DIR | /app/wh_Dataset | Dataset location in Docker |
-| OPENAI_API_KEY | sk-or-v1-... | LLM features (chat, reports) |
-| OPENAI_MODEL | gpt-5.2 | LLM model |
-| LLM_PROVIDER | openai | Provider switch |
-
-### Optional (not yet configured on Cloud Run)
-| Variable | Purpose |
-|---|---|
-| REDIS_URL | ARQ persistent job queue |
-| SENTRY_DSN | Error monitoring |
-| FIREBASE_PROJECT_ID | Auth token verification |
-| SCHEDULE_DATA_RELOAD | Cron expression for auto-reload |
-| PIPELINE_CHAIN | Comma-separated chain steps |
-| SCHEDULE_CHAIN | Cron expression for chain |
-| DEFAULT_BATCH_SIZE | Batch processor (default: 50) |
-| MAX_WORKERS | Parallel workers (default: 4, max: 8) |
-| MAX_RETRIES | Retry attempts per batch (default: 3) |
-
-### Local (.claude/settings.local.json — gitignored)
-| Variable | Purpose |
-|---|---|
-| GITHUB_TOKEN | GitHub MCP authentication |
-
----
-
-## File Registry
-
-### Root
-| File | Description | Status |
-|---|---|---|
-| CLAUDE.md | Root project brief (workforce V2) | ✅ |
-| openmemory.md | THIS FILE — persistent session memory | ✅ |
-| .gitignore | Excludes secrets, build, .mcp-data | ✅ |
-| .mcp.json | 4 MCP servers (stitch, memory, context7, github) | ✅ |
-| .firebaserc | Firebase project ID | ✅ |
-| firebase.json | Hosting config → frontend/dist | ✅ |
-| deploy.sh | Full deployment script | ✅ |
-
-### Backend
-| File | Description | Status |
-|---|---|---|
-| app/main.py | FastAPI, lifespan, 13 routers + WS, sentry init | ✅ |
-| app/config.py | All env vars (LLM, pipeline, batch, auth) | ✅ |
-| app/database.py | PipelineRun + PipelineArtifact models | ✅ |
-| app/data_loader.py | CSV load → join → enrich → taxonomy → cache | ✅ |
-| app/taxonomy.py | Deterministic grade/function/title/move classifier | ✅ |
-| app/routers/workforce.py | 16 endpoints | ✅ |
-| app/routers/turnover.py | 11 endpoints | ✅ |
-| app/routers/tenure.py | 8 endpoints | ✅ |
-| app/routers/careers.py | 6 endpoints | ✅ |
-| app/routers/managers.py | 6 endpoints | ✅ |
-| app/routers/org.py | 6 endpoints | ✅ |
-| app/routers/predictions.py | 4 endpoints (flight risk ML) | ✅ |
-| app/routers/taxonomy_router.py | 6 endpoints | ✅ |
-| app/routers/pipeline_router.py | 11 endpoints (runs, chain, schedules, health) | ✅ |
-| app/routers/chat.py | 1 LLM endpoint | ✅ |
-| app/routers/reports.py | 2 endpoints (LLM summary + ZIP export) | ✅ |
-| app/routers/upload.py | 3 endpoints | ✅ |
-| app/routers/ws.py | 2 WebSocket endpoints | ✅ |
-| app/services/batch_processor.py | Generic batch utility (retry, checkpoint, cancel) | ✅ |
-| app/services/run_manager.py | Run lifecycle, logs, artifacts, cancel flags | ✅ |
-| app/services/pipeline_runners.py | 5 runner implementations | ✅ |
-| app/services/job_queue.py | ARQ+Redis with thread fallback | ✅ |
-| app/services/scheduler.py | APScheduler cron + chains | ✅ |
-| app/services/auth.py | Firebase Auth middleware | ✅ |
-| worker.py | ARQ worker process config | ✅ |
-| tests/test_batch_processor.py | 12 tests | ✅ |
-| tests/test_run_lifecycle.py | 9 tests | ✅ |
-| tests/test_pipeline_api.py | 7 tests | ✅ |
-| Dockerfile | Python 3.11 + wh_Dataset bundled | ✅ |
-| requirements.txt | All deps (fastapi, arq, firebase-admin, sentry) | ✅ |
-
-### Frontend
-| File | Description | Status |
-|---|---|---|
-| src/App.tsx | React Router, 14 routes | ✅ |
-| src/pages/Dashboard.tsx | KPIs + charts + flight risk table | ✅ |
-| src/pages/Workforce.tsx | 8-tab dimension breakdown | ✅ |
-| src/pages/Turnover.tsx | Rates + trend + danger zones | ✅ |
-| src/pages/Tenure.tsx | Cohorts + retention curve | ✅ |
-| src/pages/FlightRisk.tsx | ML risk scores + features | ✅ |
-| src/pages/Careers.tsx | Velocity + stuck + paths | ✅ |
-| src/pages/Managers.tsx | Span + retention + revolving doors | ✅ |
-| src/pages/Org.tsx | Dept sizes + growth + restructuring | ✅ |
-| src/pages/Chat.tsx | Full chat UI | ✅ |
-| src/pages/Insights.tsx | Taxonomy charts + move examples | ✅ |
-| src/pages/PipelineHub.tsx | Launch/monitor/cancel/artifacts | ✅ |
-| src/pages/Upload.tsx | Drag-drop + status + reload | ✅ |
-| src/pages/Reports.tsx | LLM summary + export ZIP | ✅ |
-| src/pages/SettingsPage.tsx | Read-only config display | ✅ |
-| src/components/ui/*.tsx | 9 shared components | ✅ |
-| src/components/charts/ChartTooltip.tsx | Custom glass tooltip | ✅ |
-| src/components/layout/Sidebar.tsx | 5 nav groups + Pipeline Hub | ✅ |
-
-### Docs
-| File | Description | Status |
-|---|---|---|
-| docs/design-system.md | Full design token reference | ✅ |
-| docs/api-deep-dive.md | Workforce API reference (10 routers) | ✅ |
-| docs/pipeline-migration.md | Regata3010 → local adaptation mapping | ✅ |
-| docs/mcp-integration.md | MCP + Skills architecture + troubleshooting | ✅ |
-| .claude/rules/frontend.md | Frontend rules (workforce V2) | ✅ |
-| .claude/rules/backend.md | Backend rules (workforce V2) | ✅ |
-
-### CI/CD
-| File | Description | Status |
-|---|---|---|
-| .github/workflows/test.yml | Run pytest on push/PR | ✅ |
-| .github/workflows/pipeline-schedule.yml | Daily cron + manual dispatch | ✅ |
-
-### MCP + Skills
-| File | Description | Status |
-|---|---|---|
-| .mcp.json | 4 MCP server configs | ✅ |
-| .mcp-data/memory/ | Persistent memory storage (gitignored) | ✅ |
-| .claude/skills/gh-issues/SKILL.md | GitHub issue auto-fix skill | ✅ |
-| .claude/skills/skill-lookup/SKILL.md | Skill discovery skill | ✅ |
-| .claude/settings.local.json | GITHUB_TOKEN env var (gitignored) | ✅ |
-
----
-
-## Next Improvements (Prioritized)
-
-### Immediate (next session)
-1. Fix any remaining frontend page rendering issues found during live testing
-2. Configure `FIREBASE_PROJECT_ID` on Cloud Run to activate auth
-3. Set up Sentry DSN for error monitoring
-4. Test the AI Chatbot and Reports with a valid OpenAI key
-
-### Short-term (this sprint)
-5. Settings page write functionality (forms for thresholds, LLM config)
-6. PDF report generation (via weasyprint or reportlab)
-7. Synthetic data generator for missing fields (salary, performance ratings)
-8. Code-split frontend with React.lazy + Suspense
-9. Fix "nan" display in job titles for employees without history
-
-### Medium-term
-10. Redis Cloud or Memorystore for persistent ARQ queue
-11. WebSocket authentication
-12. Rate limiting on API endpoints
-13. Mobile responsive sidebar
-14. Create project-specific skills (deploy, test-all, release-notes)
-
-### Long-term
-15. Celery migration for production job queue
-16. API versioning (v1/v2 prefix)
-17. Multi-tenant support (multiple datasets/clients)
-18. Real-time data connectors (Workday, BambooHR API)
-19. i18n / localization
-20. Accessibility audit (ARIA, keyboard nav)
+### Environment Variables
+| Variable | Location | Purpose |
+|----------|----------|---------|
+| LLM_PROVIDER | backend/.env | `openrouter` or `openai` |
+| OPENROUTER_API_KEY | backend/.env | Chat LLM |
+| OPENROUTER_MODEL | backend/.env | Default: nemotron-3-super-120b-a12b:free |
+| OPENAI_API_KEY | backend/.env | Reports LLM (GPT-4o) |
+| OPENAI_MODEL | backend/.env | Default: gpt-4o-mini |
+| GITHUB_PERSONAL_ACCESS_TOKEN | .claude/settings.local.json | GitHub MCP |
