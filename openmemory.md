@@ -1,129 +1,83 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Full pipeline orchestration system implemented (Phases B-G). 28 tests passing. All deployed.
+2026-03-27 — Complete rewrite of openmemory.md reflecting all 9 sessions of work. MCP ecosystem live. All infrastructure deployed.
 
-### 2026-03-27 — Pipeline Orchestration System (Session 7)
-**What was done:**
-1. Analyzed Regata3010/HR-Analytics pipeline patterns (PipelineRun model, batch processing, checkpoints, cancel flags, ThreadPoolExecutor, log polling)
-2. Audited local backend (existing PipelineRun model unused, no job queue, no batch processing)
-3. Phase B: Extended PipelineRun model (progress, cancellation, artifacts), built BatchProcessor utility, RunManager service
-4. Phase C+D: Built pipeline_router.py (7 endpoints), 5 runner implementations, configurable env vars
-5. Phase E: Built PipelineHub.tsx frontend page (launch, monitor, logs, cancel, artifacts)
-6. Phase F: 28 tests passing (12 batch + 9 lifecycle + 7 API)
-7. Phase G: docs/pipeline-migration.md with full source→local mapping
-8. All deployed + pushed (commit 7679f9d)
+---
 
-### 2026-03-27 — Fix All Page Crashes (Session 6)
-**What was done:**
-1. User reported Tenure, Careers, Turnover, Org, Upload pages crashing/not loading
-2. Tested all API endpoints — all respond correctly in <1.5s
-3. Root cause: frontend interface field names didn't match actual API response field names
-4. Fixed Tenure.tsx: 7 interface fields, retention_pct dataKey, long-tenured table (job_title not name)
-5. Fixed Turnover.tsx: summary fields, trend departures dataKey, danger zones unwrap from anomalous_months
-6. Fixed Careers.tsx: PK_PERSON type, paths unwrap two_step+three_step, velocity endpoint
-7. Fixed Org.tsx: growth timeline pivot logic, restructuring anomalous_months, removed dead extractDeptKeys
-8. Fixed Upload.tsx: status fields (employee_count, history_count, is_loaded)
-9. All built, deployed, pushed (commit 3334c5c)
+## Session History (Reverse Chronological)
 
-### 2026-03-27 — Comprehensive Frontend-API Alignment (Session 5)
-**What was done:**
-1. Ran comprehensive audit of all 13 pages vs actual API responses — found 18 mismatches
-2. Fixed Careers.tsx (3): field renames + stuck_count from array
-3. Fixed Managers.tsx (3): span field renames + revolving_door from retention endpoint
-4. Fixed Org.tsx (2): dept_size field renames
-5. Fixed Tenure.tsx (4): unwrap .data.data, cohort dataKey total, bin not bucket
-6. Fixed Turnover.tsx (1): unwrap .data.data on all set calls
-7. Fixed Dashboard.tsx (1): tenure XAxis bin not bucket
-8. Fixed FlightRisk.tsx (4): compute high_risk from array, train_samples from model_info
-9. Verified all new taxonomy endpoints live: by-grade-band, by-function-family, stuck-employees
-10. Deployed frontend + backend, pushed commit 93775aa
+### Session 9 — MCP + Skills Ecosystem
+- Added Memory MCP (`@modelcontextprotocol/server-memory`) — persistent knowledge graph at `.mcp-data/memory/`
+- Added Context7 MCP (`@upstash/context7-mcp`) — real-time library docs lookup
+- Added GitHub MCP (`@modelcontextprotocol/server-github`) — issues/PRs/commits via PAT
+- Extracted 2 local skills into `.claude/skills/`: gh-issues, skill-lookup
+- GITHUB_TOKEN in gitignored `.claude/settings.local.json`, referenced via `${GITHUB_TOKEN}` in `.mcp.json`
+- Created `docs/mcp-integration.md` — full architecture, config, troubleshooting
+- Commit: `4649d3f`
 
-### 2026-03-27 — Bug Fixes + Taxonomy Dimensions (Session 4)
-**What was done:**
-1. Tested all API endpoints — found 3 broken: careers/stuck-employees (NaN serialization), chat/query (OpenAI proxies error), org/restructuring (returning 0)
-2. Fixed careers/stuck-employees — NaN-safe string conversion for all fields
-3. Fixed chat.py + reports.py — added httpx.AsyncClient() fallback for OpenAI AsyncClient proxies issue
-4. Added 5 new workforce endpoints: by-grade-band, by-function-family, by-job-family, by-seniority, by-grade-track
-5. Added 3 new turnover endpoints: by-grade-band, by-function-family, by-job-family
-6. Updated Workforce page — 8 dimension tabs (dept, grade band, function family, job family, seniority, career track, country, BU) with normalized data parsing
-7. Deployed both frontend + backend, pushed to GitHub (commit 4688c76)
+### Session 8 — Production Infrastructure (ARQ, Auth, WebSocket, Scheduler, Sentry)
+- ARQ + Redis job queue with thread fallback (`job_queue.py`, `worker.py`)
+- Firebase Auth middleware with graceful no-auth mode (`auth.py`)
+- WebSocket log streaming `/ws/pipeline/{id}/logs` + `/ws/pipeline/all` (`ws.py`)
+- APScheduler cron scheduling + dependency chains (`scheduler.py`)
+- `POST /api/pipeline/chain` — chained runs (data_reload → taxonomy → ML)
+- `GET /api/pipeline/schedules` + `/health` endpoints
+- Sentry SDK in lifespan (if `SENTRY_DSN` set)
+- GitHub Actions: daily cron + test CI (`.github/workflows/`)
+- PipelineHub frontend: WebSocket with polling fallback
+- Commit: `a3448fe`
 
-### 2026-03-27 — Taxonomy Engine + Continuous Pipeline (Session 3)
-**What was done:**
-1. Deep analysis of actual dataset: 25 grade titles (P1-P6, M1-M6, S1-S5, E1-E2, EXEC, C-Suite, CEO), 151 functions, 869 job titles, 3,297 career transitions
-2. Rewrote taxonomy.py from scratch — deterministic rules based on Workhuman's actual grade/title patterns, NOT generic LLM
-3. Grade hierarchy: 4 career tracks (Professional P1-P6, Management M1-M6, Support S1-S5, Executive E1-E2+EXEC+C-Suite+CEO) with seniority_rank for comparison
-4. Function families: 12 families via regex (Engineering 765, Customer Success 470, Marketing 226, Sales 217, Operations 202, Product 155, HR 125, Finance 101, Executive 81, Data 73)
-5. Career move classifier: multi-signal (grade change + title level + job family change + title overlap) → promotion/lateral/demotion/restructure
-6. Integrated taxonomy into data_loader — auto-runs on every load, adds 7 enrichment columns to employee DataFrame
-7. Built /api/taxonomy router (6 endpoints: summary, grades, functions, job-families, career-moves, regenerate)
-8. Rebuilt Insights page with real charts (grade bands bar, career moves pie, function/job family bars, move examples)
-9. Deployed backend + frontend, pushed to GitHub (commit 5ef279d)
+### Session 7 — Pipeline Orchestration (Phases B-G from Regata3010)
+- Analyzed friend's repo (Regata3010/HR-Analytics) pipeline patterns
+- Extended PipelineRun model: progress, cancellation, PipelineArtifact table
+- Built `batch_processor.py`: configurable batch_size/workers/retries/checkpoints/resume
+- Built `run_manager.py`: async lifecycle, log append, artifact registry, cancel flags
+- Built `pipeline_router.py`: 7 endpoints (start, runs, detail, log, cancel, download, types)
+- Built 5 pipeline runners: data_reload, taxonomy_regen, flight_risk_train, report_generate, export_bundle
+- Built `PipelineHub.tsx` frontend page
+- 28 tests passing (12 batch + 9 lifecycle + 7 API)
+- `docs/pipeline-migration.md` — source→local capability mapping
+- Commit: `7679f9d`
 
-## Session History
+### Session 6 — Fix Page Crashes (Tenure, Turnover, Careers, Org, Upload)
+- All 5 pages crashed due to frontend interface field names mismatching actual API responses
+- Fixed Tenure (7 fields), Turnover (summary+trend+danger), Careers (PK_PERSON+paths+velocity), Org (growth pivot+restructuring), Upload (status fields)
+- Commit: `3334c5c`
 
-### 2026-03-27 — Cleanup, Types Fix, Git Init (Session 2)
-**What was done:**
-1. Read openmemory.md for context from previous session
-2. Fixed frontend/src/types/api.ts — replaced all old recognition interfaces with new workforce types (WorkforceSummary, TurnoverSummary, TenureSummary, FlightRiskEmployee, ManagerSummary, etc.)
-3. Cleaned up stale recognition-era files: removed create_taxonomy.py, run_topic_annotation.py, backend/pipeline/, old .txt doc files
-4. Updated .gitignore to exclude env.yaml, .claude/settings.local.json, .cursor/, .firebase/
-5. Verified all 8 major API endpoints return real data from Cloud Run
-6. Rebuilt frontend and redeployed to Firebase Hosting
-7. Initialized git repo, created initial commit (965cc63) with 80 files
-8. Push to GitHub failed — needs authentication (PAT or gh CLI)
+### Session 5 — Comprehensive Frontend-API Alignment (18 Mismatches)
+- Audited all 13 pages vs actual API — found 18 mismatches across 7 pages
+- Fixed: Careers (3), Managers (3), Org (2), Tenure (4), Turnover (1), Dashboard (1), FlightRisk (4)
+- Commit: `93775aa`
 
-**Where I stopped:**
-- All code pushed to GitHub (vkinnnnn/HR-ANALYTICS) — 3 commits on main
-- taxonomy.py built (LLM batch classifier for job families, grades, move types)
-- API docs rewritten for workforce analytics
-- Everything deployed and live
+### Session 4 — Bug Fixes + Taxonomy-Enriched Dimensions
+- Fixed 3 broken endpoints: careers/stuck-employees, chat/query (OpenAI proxies), org/restructuring
+- Added 5 workforce + 3 turnover taxonomy-enriched endpoints (by-grade-band, by-function-family, by-job-family, by-seniority, by-grade-track)
+- Updated Workforce page with 8 dimension tabs + normalized data parsing
+- Commit: `4688c76`
 
-**What's next:**
-- Test each frontend page end-to-end against live backend
-- Integrate taxonomy.py into data_loader (auto-run on startup)
-- Build the Insights page to display taxonomy results
-- Redeploy backend with taxonomy module
+### Session 3 — Precise Data-Driven Taxonomy
+- Deep analysis: 25 grades, 151 functions, 869 titles, 3,297 career transitions
+- Rebuilt `taxonomy.py` — Workhuman-specific grade hierarchy (P1-P6, M1-M6, S1-S5, E1-E2, EXEC, C-Suite, CEO)
+- 12 function families via regex, job title seniority + family classifiers
+- Career move classifier: multi-signal (grade + title level + family + overlap)
+- Taxonomy auto-runs on data load, adds 7 enrichment columns
+- Built `/api/taxonomy` router (6 endpoints) + rebuilt Insights page with real charts
+- Commit: `5ef279d`
 
+### Session 2 — Cleanup, Types Fix, Git Init
+- Replaced old recognition types/api.ts with workforce interfaces
+- Cleaned stale recognition-era files (create_taxonomy.py, run_topic_annotation.py, backend/pipeline/)
+- Initialized git, first commit, push to GitHub (vkinnnnn/HR-ANALYTICS)
+- Commit: `fef37a6`, `8539953`
 
-### 2026-03-27 — Full Platform Pivot & Redeployment
-**What was done:**
-1. Read all 6 original project docs (setup-script.sh, design-system-doc.txt, claude-rules-frontend.txt, claude-rules-backend.txt, claude-md-root.txt, api-deep-dive-doc.txt)
-2. Created .md rule files: CLAUDE.md, docs/design-system.md, docs/api-deep-dive.md, .claude/rules/frontend.md, .claude/rules/backend.md
-3. Built entire original "Recognition IQ" backend (FastAPI + 12 routers + pipeline) and frontend (React + 14 pages)
-4. Configured Stitch MCP server with Google API key in .mcp.json
-5. Deployed frontend to Firebase Hosting (hr-analytics-f23c0.web.app)
-6. Installed gcloud CLI, linked billing account (01BFD0-079732-2ED266), enabled Cloud Run + Cloud Build + Artifact Registry APIs
-7. Deployed backend to Cloud Run (hr-analytics-backend-88806953030.us-central1.run.app)
-8. **MAJOR PIVOT**: User provided real dataset (wh_Dataset/) — workforce/HR lifecycle data, NOT recognition awards
-9. Read V2 rule files (claude-md-v2.txt, claude-rules-backend_V2.txt, claude-rules-frontend_V2.txt)
-10. Updated all .md rule files for workforce analytics pivot
-11. Built data_loader.py — loads 3 CSVs, joins on PK_PERSON=pk_user, computes tenure/is_active/role_changes/manager_changes/time_in_current_role
-12. Verified data loader: 2,466 employees, 1,110 active, 1,356 departed, 11,803 history records, 37 departments, 15 countries, 25 grades
-13. Built 11 new backend routers: workforce, turnover, tenure, careers, managers, org, predictions, chat, reports, upload (replaced old recognition routers)
-14. Updated Sidebar with new nav groups: Overview, Retention, People, Intelligence, Operations
-15. Built all 13 new frontend pages: Dashboard, Workforce, Turnover, Tenure, FlightRisk, Careers, Managers, Org, Chat, Insights, Upload, Reports, SettingsPage
-16. Fixed TypeScript build errors (ReactNode type-only imports, unused vars)
-17. Copied wh_Dataset into backend/ for Docker build
-18. Redeployed both frontend (Firebase) and backend (Cloud Run) with real data bundled
-19. Verified live API: /api/workforce/summary returns real data (2466 employees, 55% turnover, 5.5yr avg tenure)
-
-**Decisions made:**
-- Platform is WORKFORCE analytics, not recognition analytics — permanent pivot
-- Data lives in wh_Dataset/ and is bundled into Docker image for Cloud Run
-- All analytics computed from pandas DataFrames in memory, no SQL for analytics
-- SQLite only for metadata (upload logs, settings)
-- OpenAI API key and model (gpt-5.2) set via Cloud Run env vars
-- Firebase project: hr-analytics-f23c0, billing account: 01BFD0-079732-2ED266
-- User is vkinnnnn@gmail.com on gcloud
-
-**What's next:**
-- User should verify the live site at https://hr-analytics-f23c0.web.app
-- May need to fix frontend issues if API response shapes don't match what pages expect
-- Taxonomy generation (LLM-based job family/grade classification) not yet implemented
-- AI Chatbot endpoint works but needs OpenAI key to be valid
-- Settings page is read-only placeholder
+### Session 1 — Full Platform Build + Pivot
+- Built original Recognition IQ (12 routers + 14 pages) from project docs
+- Deployed to Firebase Hosting + Cloud Run
+- **PIVOTED** to Workforce Analytics when real dataset arrived (wh_Dataset/)
+- Rebuilt entire backend (11 routers) + frontend (13 pages) for workforce domain
+- Verified: 2,466 employees, 1,110 active, 1,356 departed, 11,803 history records
+- Initial commit: `965cc63`
 
 ---
 
@@ -131,153 +85,232 @@
 
 ### What's Built & Working
 
-**Backend (all deployed to Cloud Run):**
-- ✅ app/main.py — FastAPI entry point with lifespan, CORS, 10 routers registered
-- ✅ app/config.py — pydantic-settings with .env support
-- ✅ app/database.py — SQLAlchemy async + PipelineRun model
-- ✅ app/data_loader.py — Loads 3 CSVs, joins, computes derived fields, caches in memory
-- ✅ app/routers/workforce.py — 11 endpoints: summary, by-dept/BU/function/grade/location/country, grade-pyramid, headcount-trend, active-vs-departed
-- ✅ app/routers/turnover.py — 8 endpoints: summary, by-dept/grade/location/function, trend, tenure-at-departure, danger-zones
-- ✅ app/routers/tenure.py — 8 endpoints: summary, by-dept/grade, cohorts, distribution, long-tenured, short-departures, retention-curve
-- ✅ app/routers/careers.py — 6 endpoints: summary, promotion-velocity, stuck-employees, career-paths, title-changes, by-department
-- ✅ app/routers/managers.py — 6 endpoints: summary, span-distribution, leaderboard, retention, ratio-by-department, churn
-- ✅ app/routers/org.py — 6 endpoints: summary, department-sizes, department-growth, restructuring, hierarchy, layers
-- ✅ app/routers/predictions.py — 4 endpoints: flight-risk, feature-importance, risk-by-department, retrain
-- ✅ app/routers/chat.py — 1 endpoint: POST /query (needs valid OpenAI key)
-- ✅ app/routers/reports.py — 2 endpoints: POST /executive-summary, GET /export
-- ✅ app/routers/upload.py — 3 endpoints: POST /csv, GET /status, POST /reload
+**Backend — 85 API routes on Cloud Run:**
 
-**Frontend (all deployed to Firebase Hosting):**
-- ✅ components/ui/ — Panel, KpiCard, AnimatedNumber, Badge, SectionHeader, PageHero, InsightBanner, Tabs, Skeleton
-- ✅ components/charts/ChartTooltip.tsx — Custom glass tooltip
-- ✅ components/layout/Sidebar.tsx — 5 nav groups (Overview/Retention/People/Intelligence/Operations)
-- ✅ components/layout/AmbientBackground.tsx — Radial gradients
-- ✅ pages/Dashboard.tsx — KPIs + headcount trend + turnover by dept + tenure dist + flight risk table
-- ✅ pages/Workforce.tsx — Tab-based dimension breakdown + grade pyramid + active/departed pie
-- ✅ pages/Turnover.tsx — Rates + trend line + dept bars + tenure-at-departure + danger zones
-- ✅ pages/Tenure.tsx — Cohorts + distribution + retention curve + long-tenured list
-- ✅ pages/FlightRisk.tsx — Risk scores table + feature importance + risk by dept
-- ✅ pages/Careers.tsx — Promotion velocity + stuck employees + career paths
-- ✅ pages/Managers.tsx — Span distribution + leaderboard + retention + revolving doors
-- ✅ pages/Org.tsx — Dept sizes + growth timeline + restructuring events
-- ✅ pages/Chat.tsx — Chat UI with suggested prompts
-- ✅ pages/Insights.tsx — Taxonomy placeholder panels
-- ✅ pages/Upload.tsx — Drag-drop upload + status + reload
-- ✅ pages/Reports.tsx — Executive summary generation + export download
-- ✅ pages/SettingsPage.tsx — Read-only config display
-- ✅ lib/api.ts — Axios client pointing to VITE_API_URL
-- ✅ lib/utils.ts — cn(), CHART_COLORS, formatNumber, formatCurrency, formatPercent
-- ✅ types/api.ts — TypeScript interfaces (may need updating for new API shapes)
-- ✅ App.tsx — React Router with all 13 routes
-- ✅ index.css — Tailwind + design tokens + animations
+| Area | File | Endpoints | Status |
+|---|---|---|---|
+| Core | main.py | Lifespan, CORS, 13 routers + WS | ✅ |
+| Config | config.py | All env vars (LLM, pipeline, batch, auth) | ✅ |
+| Database | database.py | PipelineRun + PipelineArtifact models | ✅ |
+| Data | data_loader.py | CSV load, join, enrich, taxonomy, cache | ✅ |
+| Taxonomy | taxonomy.py | Grade/function/title/career move classifier | ✅ |
+| Workforce | routers/workforce.py | 16 endpoints (incl. taxonomy dimensions) | ✅ |
+| Turnover | routers/turnover.py | 11 endpoints (incl. taxonomy breakdowns) | ✅ |
+| Tenure | routers/tenure.py | 8 endpoints | ✅ |
+| Careers | routers/careers.py | 6 endpoints | ✅ |
+| Managers | routers/managers.py | 6 endpoints | ✅ |
+| Org | routers/org.py | 6 endpoints | ✅ |
+| Predictions | routers/predictions.py | 4 endpoints (flight risk ML) | ✅ |
+| Taxonomy API | routers/taxonomy_router.py | 6 endpoints | ✅ |
+| Chat | routers/chat.py | 1 endpoint (LLM) | ✅ (needs valid key) |
+| Reports | routers/reports.py | 2 endpoints (LLM + ZIP) | ✅ (needs valid key) |
+| Upload | routers/upload.py | 3 endpoints | ✅ |
+| Pipeline | routers/pipeline_router.py | 11 endpoints (start, runs, chain, health, schedules) | ✅ |
+| WebSocket | routers/ws.py | 2 WS endpoints (per-run logs, all-runs) | ✅ |
+| Services | services/batch_processor.py | Generic batch processing utility | ✅ |
+| Services | services/run_manager.py | Run lifecycle, logs, artifacts, cancel | ✅ |
+| Services | services/pipeline_runners.py | 5 runner implementations | ✅ |
+| Services | services/job_queue.py | ARQ + Redis with thread fallback | ✅ |
+| Services | services/scheduler.py | APScheduler cron + dependency chains | ✅ |
+| Services | services/auth.py | Firebase Auth middleware | ✅ |
+| Worker | worker.py | ARQ worker process config | ✅ |
+| Tests | tests/ | 28 tests (batch, lifecycle, API) | ✅ All passing |
+
+**Frontend — 14 pages on Firebase Hosting:**
+
+| Page | Route | Status |
+|---|---|---|
+| Dashboard | `/` | ✅ Working |
+| Workforce | `/workforce` | ✅ Working (8 dimension tabs) |
+| Turnover | `/turnover` | ✅ Working |
+| Tenure | `/tenure` | ✅ Working |
+| Flight Risk | `/flight-risk` | ✅ Working |
+| Careers | `/careers` | ✅ Working |
+| Managers | `/managers` | ✅ Working |
+| Org Structure | `/org` | ✅ Working |
+| AI Chatbot | `/chat` | ✅ Working (needs LLM key) |
+| AI Insights | `/insights` | ✅ Working (real taxonomy data) |
+| Pipeline Hub | `/pipeline` | ✅ Working (WebSocket + polling) |
+| Data Upload | `/upload` | ✅ Working |
+| Reports | `/reports` | ✅ Working (needs LLM key) |
+| Settings | `/settings` | ✅ Read-only |
 
 **Infrastructure:**
-- ✅ Firebase Hosting — hr-analytics-f23c0.web.app
-- ✅ Cloud Run — hr-analytics-backend-88806953030.us-central1.run.app
-- ✅ Billing linked (account 01BFD0-079732-2ED266)
-- ✅ APIs enabled: run, cloudbuild, artifactregistry
-- ✅ .mcp.json — Stitch MCP server configured
-- ✅ .firebaserc — project hr-analytics-f23c0
-- ✅ firebase.json — hosting config pointing to frontend/dist
-- ✅ deploy.sh — full deployment script
-- ✅ backend/Dockerfile — Python 3.11 slim with wh_Dataset bundled
-- ✅ backend/env.yaml — CORS, DATABASE_URL, DATA_DIR, OPENAI_API_KEY, OPENAI_MODEL
 
-### What's NOT Built Yet
-- ❌ taxonomy.py — LLM-based job title/grade/move classification (planned but not implemented)
-- ❌ Synthetic data generation for features not in current dataset
-- ❌ Settings page write functionality (currently read-only)
-- ❌ PDF report generation
-- ❌ Scheduled reports
-- ❌ Git repo initialization and push to GitHub
+| Component | URL/Location | Status |
+|---|---|---|
+| Frontend | https://hr-analytics-f23c0.web.app | ✅ Live |
+| Backend | https://hr-analytics-backend-88806953030.us-central1.run.app | ✅ Live |
+| API Docs | .../docs (Swagger UI) | ✅ Live |
+| GitHub | https://github.com/vkinnnnn/HR-ANALYTICS | ✅ 10+ commits on main |
+| Firebase Project | hr-analytics-f23c0 | ✅ Billing linked |
+| Cloud Run Region | us-central1 | ✅ |
+| GCloud Account | vkinnnnn@gmail.com | ✅ |
+| Billing Account | 01BFD0-079732-2ED266 | ✅ |
 
-### Where I Stopped
-- All code pushed to GitHub: https://github.com/vkinnnnn/HR-ANALYTICS (3 commits on main)
-- All code deployed and live (Firebase + Cloud Run)
-- taxonomy.py built, API docs rewritten
-- Next: integrate taxonomy into pipeline, test frontend pages, redeploy
+**MCP Ecosystem (4 servers + 2 skills):**
+
+| Server | Package | Purpose | Status |
+|---|---|---|---|
+| Stitch | `github:davideast/stitch-mcp` | Google Gemini AI | ✅ |
+| Memory | `@modelcontextprotocol/server-memory` | Persistent knowledge graph | ✅ |
+| Context7 | `@upstash/context7-mcp` | Library docs lookup | ✅ |
+| GitHub | `@modelcontextprotocol/server-github` | Issues/PRs/commits | ✅ |
+
+| Skill | Location | Purpose |
+|---|---|---|
+| gh-issues | `.claude/skills/gh-issues/` | Auto-fix GitHub issues |
+| skill-lookup | `.claude/skills/skill-lookup/` | Discover agent skills |
 
 ---
 
-## Architecture Decisions Made
+## What's NOT Built Yet / Remaining Work
 
-1. **Workforce, not recognition** — The platform analyzes employee lifecycle data (jobs, tenure, turnover, careers). The original recognition/NLP prototype is dead code that has been removed.
-2. **CSV → pandas → in-memory cache** — All analytics computed from pandas DataFrames. No SQL queries for analytics. SQLite only for metadata.
-3. **Data bundled in Docker** — wh_Dataset/ is copied into the backend Docker image so Cloud Run has the data on startup.
-4. **Dual deploy** — Frontend on Firebase Hosting (free, static), Backend on Cloud Run (serverless, auto-scales 0-3).
-5. **OpenAI for AI features** — GPT model (currently set to gpt-5.2) for chatbot and taxonomy. Temperature 0.1 for classification, 0.7 for reports.
-6. **Design system preserved** — CodeRabbit-inspired dark theme with orange accent. All existing UI components (Panel, KpiCard, Badge, etc.) reused for new pages.
-7. **CORS origins** — Backend allows https://hr-analytics-f23c0.web.app and https://hr-analytics-f23c0.firebaseapp.com.
+### High Priority
+- ❌ **Settings page write functionality** — currently read-only, needs forms for LLM config, thresholds
+- ❌ **PDF report generation** — Reports page generates text via LLM but no PDF download
+- ❌ **Synthetic data generation** — for features not in dataset (salary, performance, demographics, engagement)
+- ❌ **End-to-end page testing** — some pages may still have minor rendering issues with edge case data
+- ❌ **Code-splitting** — frontend bundle is 750KB, needs lazy loading for pages
+
+### Medium Priority
+- ❌ **Redis setup for production** — ARQ falls back to threads. Need Cloud Memorystore or Redis Cloud for persistent jobs
+- ❌ **Firebase Auth activation** — middleware exists but `FIREBASE_PROJECT_ID` not set on Cloud Run. Auth is in no-auth mode
+- ❌ **Sentry DSN configuration** — SDK wired but `SENTRY_DSN` not set. No error monitoring active
+- ❌ **Move Stitch GOOGLE_API_KEY to env var** — currently hardcoded in `.mcp.json`
+- ❌ **prompts.chat MCP server** — needed for skill-lookup skill to fully work
+- ❌ **Headcount trend optimization** — iterates every month since first hire, slow for large datasets
+
+### Low Priority / Nice-to-Have
+- ❌ **Project-specific skills** — create deploy, test-all, release skills
+- ❌ **Memory auto-backup cron** — periodic backup of .mcp-data/memory/
+- ❌ **WebSocket auth** — WS endpoints currently unauthenticated
+- ❌ **Celery migration** — replace thread-based jobs with Celery for true production queue
+- ❌ **Rate limiting** — no rate limits on API endpoints
+- ❌ **API versioning** — all endpoints at /api/ with no version prefix
+- ❌ **Dark mode toggle** — design system is dark-only, no light mode option
+- ❌ **Mobile responsive** — sidebar doesn't collapse on mobile
+- ❌ **i18n** — English only
+- ❌ **Accessibility audit** — no ARIA labels, keyboard nav needs work
+
+---
+
+## Architecture Decisions
+
+1. **Workforce, not recognition** — permanent pivot from Session 1
+2. **CSV → pandas → in-memory cache** — no SQL for analytics, SQLite only for pipeline metadata
+3. **Data bundled in Docker** — wh_Dataset/ copied into image for Cloud Run
+4. **Dual deploy** — Firebase Hosting (static) + Cloud Run (API)
+5. **Deterministic taxonomy** — rule-based (Workhuman grade hierarchy), not LLM-dependent
+6. **Hybrid job queue** — ARQ+Redis when available, threads otherwise
+7. **Graceful degradation** — auth/sentry/redis all optional, app works without them
+8. **MCP tokens via env vars** — `${GITHUB_TOKEN}` ref in .mcp.json, actual value in gitignored settings.local.json
+9. **Design system preserved** — CodeRabbit dark theme with orange accent, Inter font
 
 ---
 
 ## Known Issues & Bugs
 
-1. **Frontend types may mismatch API** — types/api.ts still has old recognition interfaces. May need updating to match new workforce API response shapes.
-2. **Taxonomy not implemented** — taxonomy.py doesn't exist yet. The Insights page is a placeholder.
-3. **OpenAI key validity** — The key in env.yaml (sk-or-v1-...) needs to be valid for chat and report generation to work.
-4. **gcloud path** — gcloud.cmd is at `/c/Users/chira/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd` — not in PATH, must be referenced by full path.
-5. **Headcount trend may be slow** — The /api/workforce/headcount-trend endpoint iterates over every month since first hire. Could be optimized.
-6. **GitHub repo** — https://github.com/vkinnnnn/HR-ANALYTICS (NOT Regata3010 — that's the friend's reference repo). PAT removed from remote URL after push.
+1. **Chat/Reports LLM** — OpenAI key (`sk-or-v1-...`) needs to be valid. May get 502 if expired
+2. **gcloud not in PATH** — must use full path: `/c/Users/chira/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd`
+3. **utcnow() deprecation** — SQLAlchemy model defaults use deprecated `datetime.utcnow()`. Cosmetic warnings in tests
+4. **Cloud Run cold starts** — first request after scale-to-zero takes 5-10s (data loading)
+5. **Bundle size** — 750KB JS bundle. Should code-split with dynamic imports
+6. **Some NaN values in job_title** — employees with no history show "nan" as job title in flight risk table
 
 ---
 
-## Do's and Don'ts (NEVER VIOLATE THESE)
+## Do's and Don'ts
 
 ### DO:
-- ✅ Update openmemory.md after EVERY task completion
-- ✅ Use FastAPI async lifespan pattern for startup
-- ✅ Read CSVs with pandas, process in memory, cache in dicts
-- ✅ Parse all date columns explicitly
-- ✅ Handle NaN/NaT in Expire and fk_direct_manager
-- ✅ Use design system tokens from docs/design-system.md
-- ✅ Use Recharts with custom glass tooltips
-- ✅ Use CSS Grid for tabular data
+- ✅ Update openmemory.md after EVERY task
+- ✅ Use FastAPI async lifespan (NOT @app.on_event)
+- ✅ Read CSVs with pandas, cache in `_data_cache` dict
+- ✅ Parse all dates explicitly, handle NaN/NaT
+- ✅ Use design tokens from docs/design-system.md
+- ✅ Use Recharts + custom ChartTooltip
+- ✅ Use CSS Grid for tables (not HTML `<table>`)
 - ✅ Stagger KPI animations by 60ms
-- ✅ Include loading skeletons on every page
+- ✅ Use `${ENV_VAR}` refs for secrets in .mcp.json
+- ✅ Keep .claude/settings.local.json gitignored
+- ✅ Run tests before deploying (`python -m pytest tests/ -v`)
 
 ### DON'T:
 - ❌ NEVER build recognition/award analytics
-- ❌ NEVER use @app.on_event("startup")
 - ❌ NEVER store HR data in SQLite
 - ❌ NEVER hardcode colors in frontend
+- ❌ NEVER hardcode tokens in committed files
 - ❌ NEVER use default Recharts tooltip
-- ❌ NEVER use HTML <table>
+- ❌ NEVER use HTML `<table>`
 - ❌ NEVER assume demographics data exists
-- ❌ NEVER delete session history from openmemory.md
+- ❌ NEVER delete session history from this file
+- ❌ NEVER push env.yaml or settings.local.json to git
 
 ---
 
 ## Data Understanding
 
-### Dataset Stats (verified from real data)
-- **Total employees:** 2,466
-- **Active:** 1,110 (45%)
-- **Departed:** 1,356 (55%)
-- **History records:** 11,803 (~4.8 per person average)
-- **Departments:** 37
-- **Countries:** 15
-- **Grades:** 25 unique grade_title values
-- **Avg tenure (active):** 5.5 years
-- **Avg tenure (departed):** 2.5 years
-- **Median tenure (departed):** 1.4 years
-- **Overall turnover rate:** 55.0%
-- **Total managers:** 222 (unique fk_direct_manager values)
-- **Avg span of control:** 2.92 direct reports per manager
-- **Max span of control:** 13 direct reports
+### Dataset (Workhuman workforce data)
+| File | Rows | Key Columns |
+|---|---|---|
+| function_wh.csv | 2,466 | PK_PERSON, Hire, Expire, job_title, grade_title, function_title, department_name, country |
+| wh_history_full.csv | 11,803 | pk_user, fk_direct_manager, job_title, effective_start_date, effective_end_date |
+| wh_user_history_v2.csv | 100 | pk_user, fk_direct_manager, job_title, position_title, dates |
 
-### Tenure Cohort Distribution
-- 0-1yr: 574 employees
-- 1-3yr: 737 employees
-- 3-5yr: 535 employees
-- 5-10yr: 423 employees
-- 10yr+: 189 employees
+### Key Stats
+- Total: 2,466 employees | Active: 1,110 (45%) | Departed: 1,356 (55%)
+- Avg tenure active: 5.5yr | Avg tenure departed: 2.5yr | Median departed: 1.4yr
+- 37 departments | 15 countries | 25 grades | 151 functions | 869 unique job titles
+- 222 managers | Avg span: 2.92 | Max span: 13
+- 3,297 career moves: 1,113 promotions, 799 laterals, 541 transfers, 505 demotions, 339 restructures
 
-### Edge Cases Found
-- function_wh.csv has an unnamed first column (index column from pandas export) — handled by `index_col=0`
-- fk_direct_manager is float type (nullable int stored as float due to NaN values)
-- Some employees have no history records (appear in function_wh but not wh_history_full)
-- Expire dates exist for 1,356 of 2,466 employees
+### Grade Hierarchy (Workhuman-specific)
+```
+Support:      S1 → S2 → S3 → S4 → S5
+Professional: P1 → P2 → P3 → P4 → P5 → P6
+Management:   M1 → M2 → M3 → M4 → M5 → M6
+Executive:    E1 → E2 → EXEC → C-Suite → CEO
+Other:        Hourly, Salary, Contingent Workers
+```
+
+### Join Key
+`function_wh.PK_PERSON = wh_history_full.pk_user`
+
+### Active/Departed Rule
+- Active: `Expire IS NULL` or `Expire > today`
+- Departed: `Expire IS NOT NULL` and `Expire <= today`
+
+---
+
+## Environment Variables Reference
+
+### Cloud Run (backend/env.yaml — gitignored)
+| Variable | Value | Purpose |
+|---|---|---|
+| CORS_ORIGINS | Firebase URLs | CORS whitelist |
+| DATABASE_URL | sqlite+aiosqlite:///./hr_platform.db | Pipeline metadata DB |
+| DATA_DIR | /app/wh_Dataset | Dataset location in Docker |
+| OPENAI_API_KEY | sk-or-v1-... | LLM features (chat, reports) |
+| OPENAI_MODEL | gpt-5.2 | LLM model |
+| LLM_PROVIDER | openai | Provider switch |
+
+### Optional (not yet configured on Cloud Run)
+| Variable | Purpose |
+|---|---|
+| REDIS_URL | ARQ persistent job queue |
+| SENTRY_DSN | Error monitoring |
+| FIREBASE_PROJECT_ID | Auth token verification |
+| SCHEDULE_DATA_RELOAD | Cron expression for auto-reload |
+| PIPELINE_CHAIN | Comma-separated chain steps |
+| SCHEDULE_CHAIN | Cron expression for chain |
+| DEFAULT_BATCH_SIZE | Batch processor (default: 50) |
+| MAX_WORKERS | Parallel workers (default: 4, max: 8) |
+| MAX_RETRIES | Retry attempts per batch (default: 3) |
+
+### Local (.claude/settings.local.json — gitignored)
+| Variable | Purpose |
+|---|---|
+| GITHUB_TOKEN | GitHub MCP authentication |
 
 ---
 
@@ -286,80 +319,123 @@
 ### Root
 | File | Description | Status |
 |---|---|---|
-| CLAUDE.md | Root project brief (V2 workforce) | ✅ Current |
-| openmemory.md | THIS FILE — persistent memory | ✅ Current |
-| .gitignore | Git ignore rules | ✅ Created |
-| .mcp.json | Stitch MCP server config | ✅ Created |
-| .firebaserc | Firebase project: hr-analytics-f23c0 | ✅ Created |
-| firebase.json | Firebase Hosting config | ✅ Created |
-| deploy.sh | Full deployment script | ✅ Created |
-| create_taxonomy.py | OLD — NLP taxonomy builder (recognition era) | ⚠️ Stale, should remove |
-| run_topic_annotation.py | OLD — NLP annotator (recognition era) | ⚠️ Stale, should remove |
+| CLAUDE.md | Root project brief (workforce V2) | ✅ |
+| openmemory.md | THIS FILE — persistent session memory | ✅ |
+| .gitignore | Excludes secrets, build, .mcp-data | ✅ |
+| .mcp.json | 4 MCP servers (stitch, memory, context7, github) | ✅ |
+| .firebaserc | Firebase project ID | ✅ |
+| firebase.json | Hosting config → frontend/dist | ✅ |
+| deploy.sh | Full deployment script | ✅ |
 
 ### Backend
 | File | Description | Status |
 |---|---|---|
-| backend/app/main.py | FastAPI entry, lifespan, 10 routers | ✅ Working |
-| backend/app/config.py | pydantic-settings | ✅ Working |
-| backend/app/database.py | SQLAlchemy async + PipelineRun model | ✅ Working |
-| backend/app/data_loader.py | CSV loading, joining, derived fields | ✅ Working |
-| backend/app/routers/workforce.py | 11 endpoints | ✅ Working |
-| backend/app/routers/turnover.py | 8 endpoints | ✅ Working |
-| backend/app/routers/tenure.py | 8 endpoints | ✅ Working |
-| backend/app/routers/careers.py | 6 endpoints | ✅ Working |
-| backend/app/routers/managers.py | 6 endpoints | ✅ Working |
-| backend/app/routers/org.py | 6 endpoints | ✅ Working |
-| backend/app/routers/predictions.py | 4 endpoints (flight risk ML) | ✅ Working |
-| backend/app/routers/chat.py | 1 endpoint (LLM chatbot) | ✅ Built, needs valid key |
-| backend/app/routers/reports.py | 2 endpoints (summary + export) | ✅ Built, needs valid key |
-| backend/app/routers/upload.py | 3 endpoints (csv upload, status, reload) | ✅ Working |
-| backend/pipeline/core.py | OLD — LLM wrapper (recognition era) | ⚠️ Stale |
-| backend/pipeline/runners.py | OLD — Pipeline runners (recognition era) | ⚠️ Stale |
-| backend/Dockerfile | Python 3.11 + wh_Dataset bundled | ✅ Working |
-| backend/env.yaml | Cloud Run env vars | ✅ Working |
-| backend/requirements.txt | Python dependencies | ✅ Working |
-| backend/wh_Dataset/ | Copy of dataset for Docker build | ✅ Working |
+| app/main.py | FastAPI, lifespan, 13 routers + WS, sentry init | ✅ |
+| app/config.py | All env vars (LLM, pipeline, batch, auth) | ✅ |
+| app/database.py | PipelineRun + PipelineArtifact models | ✅ |
+| app/data_loader.py | CSV load → join → enrich → taxonomy → cache | ✅ |
+| app/taxonomy.py | Deterministic grade/function/title/move classifier | ✅ |
+| app/routers/workforce.py | 16 endpoints | ✅ |
+| app/routers/turnover.py | 11 endpoints | ✅ |
+| app/routers/tenure.py | 8 endpoints | ✅ |
+| app/routers/careers.py | 6 endpoints | ✅ |
+| app/routers/managers.py | 6 endpoints | ✅ |
+| app/routers/org.py | 6 endpoints | ✅ |
+| app/routers/predictions.py | 4 endpoints (flight risk ML) | ✅ |
+| app/routers/taxonomy_router.py | 6 endpoints | ✅ |
+| app/routers/pipeline_router.py | 11 endpoints (runs, chain, schedules, health) | ✅ |
+| app/routers/chat.py | 1 LLM endpoint | ✅ |
+| app/routers/reports.py | 2 endpoints (LLM summary + ZIP export) | ✅ |
+| app/routers/upload.py | 3 endpoints | ✅ |
+| app/routers/ws.py | 2 WebSocket endpoints | ✅ |
+| app/services/batch_processor.py | Generic batch utility (retry, checkpoint, cancel) | ✅ |
+| app/services/run_manager.py | Run lifecycle, logs, artifacts, cancel flags | ✅ |
+| app/services/pipeline_runners.py | 5 runner implementations | ✅ |
+| app/services/job_queue.py | ARQ+Redis with thread fallback | ✅ |
+| app/services/scheduler.py | APScheduler cron + chains | ✅ |
+| app/services/auth.py | Firebase Auth middleware | ✅ |
+| worker.py | ARQ worker process config | ✅ |
+| tests/test_batch_processor.py | 12 tests | ✅ |
+| tests/test_run_lifecycle.py | 9 tests | ✅ |
+| tests/test_pipeline_api.py | 7 tests | ✅ |
+| Dockerfile | Python 3.11 + wh_Dataset bundled | ✅ |
+| requirements.txt | All deps (fastapi, arq, firebase-admin, sentry) | ✅ |
 
 ### Frontend
 | File | Description | Status |
 |---|---|---|
-| frontend/src/App.tsx | React Router, 13 routes | ✅ Working |
-| frontend/src/main.tsx | React entry point | ✅ Working |
-| frontend/src/index.css | Tailwind + design tokens + animations | ✅ Working |
-| frontend/src/lib/api.ts | Axios client (VITE_API_URL) | ✅ Working |
-| frontend/src/lib/utils.ts | cn, CHART_COLORS, formatters | ✅ Working |
-| frontend/src/types/api.ts | TS interfaces | ⚠️ May need updating for new API |
-| frontend/src/components/ui/*.tsx | 9 shared UI components | ✅ Working |
-| frontend/src/components/charts/ChartTooltip.tsx | Custom glass tooltip | ✅ Working |
-| frontend/src/components/layout/Sidebar.tsx | 5-group workforce nav | ✅ Working |
-| frontend/src/components/layout/AmbientBackground.tsx | Radial gradients | ✅ Working |
-| frontend/src/pages/Dashboard.tsx | Workforce dashboard | ✅ Built |
-| frontend/src/pages/Workforce.tsx | Composition breakdown | ✅ Built |
-| frontend/src/pages/Turnover.tsx | Attrition analysis | ✅ Built |
-| frontend/src/pages/Tenure.tsx | Tenure analysis | ✅ Built |
-| frontend/src/pages/FlightRisk.tsx | ML risk scores | ✅ Built |
-| frontend/src/pages/Careers.tsx | Career progression | ✅ Built |
-| frontend/src/pages/Managers.tsx | Manager analytics | ✅ Built |
-| frontend/src/pages/Org.tsx | Org structure | ✅ Built |
-| frontend/src/pages/Chat.tsx | AI chatbot | ✅ Built |
-| frontend/src/pages/Insights.tsx | Taxonomy placeholder | ✅ Built |
-| frontend/src/pages/Upload.tsx | Data upload | ✅ Built |
-| frontend/src/pages/Reports.tsx | Reports & export | ✅ Built |
-| frontend/src/pages/SettingsPage.tsx | Settings (read-only) | ✅ Built |
-| frontend/.env.production | VITE_API_URL for Cloud Run | ✅ Working |
-| frontend/.env.development | VITE_API_URL for localhost | ✅ Working |
+| src/App.tsx | React Router, 14 routes | ✅ |
+| src/pages/Dashboard.tsx | KPIs + charts + flight risk table | ✅ |
+| src/pages/Workforce.tsx | 8-tab dimension breakdown | ✅ |
+| src/pages/Turnover.tsx | Rates + trend + danger zones | ✅ |
+| src/pages/Tenure.tsx | Cohorts + retention curve | ✅ |
+| src/pages/FlightRisk.tsx | ML risk scores + features | ✅ |
+| src/pages/Careers.tsx | Velocity + stuck + paths | ✅ |
+| src/pages/Managers.tsx | Span + retention + revolving doors | ✅ |
+| src/pages/Org.tsx | Dept sizes + growth + restructuring | ✅ |
+| src/pages/Chat.tsx | Full chat UI | ✅ |
+| src/pages/Insights.tsx | Taxonomy charts + move examples | ✅ |
+| src/pages/PipelineHub.tsx | Launch/monitor/cancel/artifacts | ✅ |
+| src/pages/Upload.tsx | Drag-drop + status + reload | ✅ |
+| src/pages/Reports.tsx | LLM summary + export ZIP | ✅ |
+| src/pages/SettingsPage.tsx | Read-only config display | ✅ |
+| src/components/ui/*.tsx | 9 shared components | ✅ |
+| src/components/charts/ChartTooltip.tsx | Custom glass tooltip | ✅ |
+| src/components/layout/Sidebar.tsx | 5 nav groups + Pipeline Hub | ✅ |
 
 ### Docs
 | File | Description | Status |
 |---|---|---|
-| docs/design-system.md | Full design token reference | ✅ Current |
-| docs/api-deep-dive.md | OLD — recognition API docs | ⚠️ Stale, needs rewrite |
-| .claude/rules/frontend.md | Frontend rules (V2 workforce) | ✅ Current |
-| .claude/rules/backend.md | Backend rules (V2 workforce) | ✅ Current |
+| docs/design-system.md | Full design token reference | ✅ |
+| docs/api-deep-dive.md | Workforce API reference (10 routers) | ✅ |
+| docs/pipeline-migration.md | Regata3010 → local adaptation mapping | ✅ |
+| docs/mcp-integration.md | MCP + Skills architecture + troubleshooting | ✅ |
+| .claude/rules/frontend.md | Frontend rules (workforce V2) | ✅ |
+| .claude/rules/backend.md | Backend rules (workforce V2) | ✅ |
 
-### Dataset
-| File | Rows | Description |
+### CI/CD
+| File | Description | Status |
 |---|---|---|
-| wh_Dataset/function_wh.csv | 2,466 | Employee master (PK_PERSON, Hire, Expire, job/dept/grade/location) |
-| wh_Dataset/wh_history_full.csv | 11,803 | Job change history (pk_user, manager, title, dates) |
-| wh_Dataset/wh_user_history_v2.csv | 100 | Enriched subset with position_title |
+| .github/workflows/test.yml | Run pytest on push/PR | ✅ |
+| .github/workflows/pipeline-schedule.yml | Daily cron + manual dispatch | ✅ |
+
+### MCP + Skills
+| File | Description | Status |
+|---|---|---|
+| .mcp.json | 4 MCP server configs | ✅ |
+| .mcp-data/memory/ | Persistent memory storage (gitignored) | ✅ |
+| .claude/skills/gh-issues/SKILL.md | GitHub issue auto-fix skill | ✅ |
+| .claude/skills/skill-lookup/SKILL.md | Skill discovery skill | ✅ |
+| .claude/settings.local.json | GITHUB_TOKEN env var (gitignored) | ✅ |
+
+---
+
+## Next Improvements (Prioritized)
+
+### Immediate (next session)
+1. Fix any remaining frontend page rendering issues found during live testing
+2. Configure `FIREBASE_PROJECT_ID` on Cloud Run to activate auth
+3. Set up Sentry DSN for error monitoring
+4. Test the AI Chatbot and Reports with a valid OpenAI key
+
+### Short-term (this sprint)
+5. Settings page write functionality (forms for thresholds, LLM config)
+6. PDF report generation (via weasyprint or reportlab)
+7. Synthetic data generator for missing fields (salary, performance ratings)
+8. Code-split frontend with React.lazy + Suspense
+9. Fix "nan" display in job titles for employees without history
+
+### Medium-term
+10. Redis Cloud or Memorystore for persistent ARQ queue
+11. WebSocket authentication
+12. Rate limiting on API endpoints
+13. Mobile responsive sidebar
+14. Create project-specific skills (deploy, test-all, release-notes)
+
+### Long-term
+15. Celery migration for production job queue
+16. API versioning (v1/v2 prefix)
+17. Multi-tenant support (multiple datasets/clients)
+18. Real-time data connectors (Workday, BambooHR API)
+19. i18n / localization
+20. Accessibility audit (ARIA, keyboard nav)
