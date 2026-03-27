@@ -24,6 +24,9 @@ CLAUDE.local.md
 # Firebase
 .firebase/
 
+# MCP data (memory, caches)
+.mcp-data/
+
 # OS
 .DS_Store
 Thumbs.db

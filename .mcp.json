@@ -6,6 +6,24 @@
       "env": {
         "GOOGLE_API_KEY": "AIzaSyD7XGhutGm5bo9oR0hC1ub9fyVjARQOgMk"
       }
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "C:\\PROJECTS\\HR_ANALYTICS_PLATFORM\\.mcp-data\\memory\\memory.json"
+      }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
     }
   }
 }
