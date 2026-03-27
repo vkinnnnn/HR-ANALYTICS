@@ -6,12 +6,13 @@ Local adaptation: workforce domain run_types, safe file handling, artifact regis
 """
 
 import os
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..services import run_manager
 from ..services.pipeline_runners import RUNNER_REGISTRY
+from ..services.auth import require_auth, optional_auth
 from ..data_loader import is_loaded
 
 router = APIRouter()
@@ -37,7 +38,7 @@ class CancelResponse(BaseModel):
 # ── Run lifecycle ──
 
 @router.post("/start")
-async def start_run(req: RunStartRequest):
+async def start_run(req: RunStartRequest, user: dict = Depends(require_auth)):
     """Start a new pipeline run. Dispatches as background thread."""
     if req.run_type not in RUNNER_REGISTRY:
         raise HTTPException(
@@ -61,11 +62,17 @@ async def start_run(req: RunStartRequest):
         config=config,
     )
 
-    # Dispatch background runner
-    runner_fn = RUNNER_REGISTRY[req.run_type]
-    run_manager.dispatch_background(run.id, runner_fn, run_type=req.run_type, **config)
+    # Dispatch via ARQ (Redis) or thread fallback
+    from ..services.job_queue import enqueue_job, is_redis_available
+    job_id = await enqueue_job(req.run_type, run.id, **config)
 
-    return {"run_id": run.id, "status": "pending", "run_type": req.run_type}
+    return {
+        "run_id": run.id,
+        "status": "pending",
+        "run_type": req.run_type,
+        "job_id": job_id,
+        "queue": "arq" if is_redis_available() else "thread",
+    }
 
 
 @router.get("/runs")
@@ -146,7 +153,7 @@ async def get_run_log(run_id: int):
 
 
 @router.post("/runs/{run_id}/cancel")
-async def cancel_run(run_id: int):
+async def cancel_run(run_id: int, user: dict = Depends(require_auth)):
     """Cancel a running pipeline job."""
     run = await run_manager.get_run(run_id)
     if not run:
@@ -193,4 +200,51 @@ async def list_run_types():
             {"id": rt, "description": descriptions.get(rt, "")}
             for rt in RUNNER_REGISTRY.keys()
         ]
+    }
+
+
+# ── Dependency Chains ──
+
+class ChainRequest(BaseModel):
+    steps: list[str]  # e.g. ["data_reload", "taxonomy_regen", "flight_risk_train"]
+
+
+@router.post("/chain")
+async def start_chain(req: ChainRequest, user: dict = Depends(require_auth)):
+    """Start a dependency chain. Each step runs after the previous completes."""
+    for step in req.steps:
+        if step not in RUNNER_REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Unknown run_type in chain: '{step}'")
+
+    from ..services.scheduler import trigger_chain
+    run_ids = await trigger_chain(req.steps)
+    return {
+        "chain_steps": req.steps,
+        "run_ids": run_ids,
+        "status": "started",
+    }
+
+
+# ── Scheduled Jobs Info ──
+
+@router.get("/schedules")
+async def list_schedules():
+    """List all scheduled pipeline jobs."""
+    from ..services.scheduler import get_scheduled_jobs
+    return {"schedules": get_scheduled_jobs()}
+
+
+# ── Queue Health ──
+
+@router.get("/health")
+async def queue_health():
+    """Check job queue and scheduler health."""
+    from ..services.job_queue import is_redis_available
+    from ..services.scheduler import get_scheduled_jobs
+    from ..services.auth import is_auth_enabled
+    return {
+        "redis_connected": is_redis_available(),
+        "auth_enabled": is_auth_enabled(),
+        "scheduled_jobs": len(get_scheduled_jobs()),
+        "available_run_types": list(RUNNER_REGISTRY.keys()),
     }

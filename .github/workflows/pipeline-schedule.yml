@@ -1,0 +1,64 @@
+name: Scheduled Pipeline Runs
+
+on:
+  schedule:
+    # Daily data reload + full chain at 2am UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'Pipeline run type'
+        required: true
+        default: 'data_reload'
+        type: choice
+        options:
+          - data_reload
+          - taxonomy_regen
+          - flight_risk_train
+          - chain
+      chain_steps:
+        description: 'Chain steps (comma-separated, only for chain type)'
+        required: false
+        default: 'data_reload,taxonomy_regen,flight_risk_train'
+
+env:
+  BACKEND_URL: https://hr-analytics-backend-88806953030.us-central1.run.app
+
+jobs:
+  trigger-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scheduled pipeline
+        if: github.event_name == 'schedule'
+        run: |
+          # Daily chain: reload → taxonomy → ML retrain
+          curl -X POST "$BACKEND_URL/api/pipeline/chain" \
+            -H "Content-Type: application/json" \
+            -d '{"steps": ["data_reload", "taxonomy_regen", "flight_risk_train"]}' \
+            --fail --silent --show-error
+          echo "Chain triggered successfully"
+
+      - name: Trigger manual pipeline
+        if: github.event_name == 'workflow_dispatch' && inputs.run_type != 'chain'
+        run: |
+          curl -X POST "$BACKEND_URL/api/pipeline/start" \
+            -H "Content-Type: application/json" \
+            -d "{\"run_type\": \"${{ inputs.run_type }}\"}" \
+            --fail --silent --show-error
+          echo "Run triggered: ${{ inputs.run_type }}"
+
+      - name: Trigger manual chain
+        if: github.event_name == 'workflow_dispatch' && inputs.run_type == 'chain'
+        run: |
+          STEPS=$(echo '${{ inputs.chain_steps }}' | sed 's/,/","/g')
+          curl -X POST "$BACKEND_URL/api/pipeline/chain" \
+            -H "Content-Type: application/json" \
+            -d "{\"steps\": [\"$STEPS\"]}" \
+            --fail --silent --show-error
+          echo "Chain triggered: ${{ inputs.chain_steps }}"
+
+      - name: Wait and verify
+        run: |
+          sleep 5
+          RUNS=$(curl -s "$BACKEND_URL/api/pipeline/runs?limit=3")
+          echo "Recent runs: $RUNS"

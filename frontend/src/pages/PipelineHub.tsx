@@ -68,20 +68,67 @@ export function PipelineHub() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  // Poll running jobs every 3s
+  // WebSocket for real-time log streaming (with polling fallback)
   useEffect(() => {
-    const hasRunning = runs.some(r => r.status === 'running' || r.status === 'pending');
-    if (!hasRunning) return;
-    const interval = setInterval(() => {
-      fetchRuns();
-      if (selectedRun && (selectedRun.status === 'running' || selectedRun.status === 'pending')) {
+    if (!selectedRun || !['running', 'pending'].includes(selectedRun.status)) return;
+
+    const wsBase = (api.defaults.baseURL || 'http://localhost:8000').replace(/^http/, 'ws');
+    let ws: WebSocket | null = null;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+
+    try {
+      ws = new WebSocket(`${wsBase}/ws/pipeline/${selectedRun.id}/logs`);
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.new_log || data.status) {
+          setSelectedRun(prev => prev ? {
+            ...prev,
+            log: (prev.log || '') + (data.new_log || ''),
+            status: data.status || prev.status,
+            progress_pct: data.progress_pct ?? prev.progress_pct,
+          } : null);
+        }
+        if (data.final) {
+          fetchRuns();
+          if (data.status === 'done' || data.status === 'failed') {
+            selectRun(selectedRun.id); // Refresh full detail
+          }
+        }
+      };
+      ws.onerror = () => {
+        // Fallback to polling if WebSocket fails
+        ws?.close();
+        ws = null;
+        fallbackInterval = setInterval(() => {
+          fetchRuns();
+          api.get(`/api/pipeline/runs/${selectedRun.id}/log`).then(res => {
+            setSelectedRun(prev => prev ? { ...prev, log: res.data?.log, status: res.data?.status, progress_pct: res.data?.progress_pct } : null);
+          }).catch(() => {});
+        }, 3000);
+      };
+    } catch {
+      // WebSocket not supported, use polling
+      fallbackInterval = setInterval(() => {
+        fetchRuns();
         api.get(`/api/pipeline/runs/${selectedRun.id}/log`).then(res => {
           setSelectedRun(prev => prev ? { ...prev, log: res.data?.log, status: res.data?.status, progress_pct: res.data?.progress_pct } : null);
         }).catch(() => {});
-      }
-    }, 3000);
+      }, 3000);
+    }
+
+    return () => {
+      ws?.close();
+      if (fallbackInterval) clearInterval(fallbackInterval);
+    };
+  }, [selectedRun?.id, selectedRun?.status]);
+
+  // Also poll the runs list when any are active
+  useEffect(() => {
+    const hasRunning = runs.some(r => r.status === 'running' || r.status === 'pending');
+    if (!hasRunning) return;
+    const interval = setInterval(fetchRuns, 5000);
     return () => clearInterval(interval);
-  }, [runs, selectedRun, fetchRuns]);
+  }, [runs, fetchRuns]);
 
   const launchRun = async (runType: string) => {
     setLaunching(runType);
