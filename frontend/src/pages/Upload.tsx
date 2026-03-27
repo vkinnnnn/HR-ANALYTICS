@@ -15,10 +15,14 @@ import { Badge } from '../components/ui/Badge';
 import api from '../lib/api';
 
 interface UploadStatus {
-  loaded_rows: number;
+  is_loaded: boolean;
+  employee_count: number;
+  history_count: number;
   active_count: number;
   departed_count: number;
   loaded_at: string | null;
+  upload_dir: string;
+  recent_uploads: any[];
 }
 
 interface UploadedFile {
@@ -262,7 +266,7 @@ export function Upload() {
           ) : status ? (
             <div className="space-y-4">
               {[
-                { label: 'Total Loaded Rows', value: status.loaded_rows.toLocaleString(), color: '#FF8A4C' },
+                { label: 'Total Employees', value: status.employee_count.toLocaleString(), color: '#FF8A4C' },
                 { label: 'Active Employees', value: status.active_count.toLocaleString(), color: '#34d399' },
                 { label: 'Departed Employees', value: status.departed_count.toLocaleString(), color: '#fb7185' },
                 {

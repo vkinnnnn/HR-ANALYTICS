@@ -32,9 +32,8 @@ interface GrowthRow {
 
 interface RestructuringEvent {
   month: string;
-  department: string;
   role_changes: number;
-  description: string;
+  z_score: number;
 }
 
 export function Org() {
@@ -57,13 +56,23 @@ export function Org() {
         setSummary(sumRes.data);
         setDeptSizes(sizeRes.data.departments ?? sizeRes.data ?? []);
 
+        // Pivot department-growth: departments[].timeline[] -> flat rows keyed by year
         const growthData = growthRes.data;
-        const rows: GrowthRow[] = growthData.rows ?? growthData.data ?? growthData ?? [];
-        const depts: string[] = growthData.departments ?? growthData.top_departments ?? [];
+        const deptEntries: { department: string; timeline: { year: number; headcount: number }[] }[] =
+          growthData.departments ?? [];
+        const deptNames = deptEntries.slice(0, 5).map(d => d.department);
+        const yearMap = new Map<number, GrowthRow>();
+        for (const entry of deptEntries.slice(0, 5)) {
+          for (const pt of entry.timeline) {
+            if (!yearMap.has(pt.year)) yearMap.set(pt.year, { year: pt.year } as GrowthRow);
+            yearMap.get(pt.year)![entry.department] = pt.headcount;
+          }
+        }
+        const rows = Array.from(yearMap.values()).sort((a, b) => a.year - b.year);
         setGrowth(rows);
-        setGrowthDepts(depts.length > 0 ? depts.slice(0, 5) : extractDeptKeys(rows));
+        setGrowthDepts(deptNames);
 
-        setRestructuring(restrRes.data.events ?? restrRes.data ?? []);
+        setRestructuring(restrRes.data.anomalous_months ?? restrRes.data ?? []);
       } catch (e) {
         console.error('Org load error', e);
       } finally {
@@ -73,11 +82,6 @@ export function Org() {
     load();
   }, []);
 
-  function extractDeptKeys(rows: GrowthRow[]): string[] {
-    if (!rows.length) return [];
-    const keys = Object.keys(rows[0]).filter(k => k !== 'year');
-    return keys.slice(0, 5);
-  }
 
   return (
     <div>
@@ -243,7 +247,7 @@ export function Org() {
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#d4d4d8' }}>
-                      {evt.department}
+                      {evt.month}
                     </span>
                     <Badge
                       label={`${evt.role_changes} changes`}
@@ -252,13 +256,7 @@ export function Org() {
                     />
                   </div>
                   <div className="flex items-center gap-3" style={{ fontSize: 11, color: '#71717a' }}>
-                    <span>{evt.month}</span>
-                    {evt.description && (
-                      <>
-                        <span style={{ color: '#3f3f46' }}>|</span>
-                        <span>{evt.description}</span>
-                      </>
-                    )}
+                    <span>z-score: {evt.z_score.toFixed(2)}</span>
                   </div>
                 </div>
               ))}

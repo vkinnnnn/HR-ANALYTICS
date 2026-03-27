@@ -13,32 +13,40 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 interface TurnoverSummary {
-  overall_turnover_rate: number;
-  avg_tenure_at_departure: number;
-  total_departed: number;
-  danger_zone_count: number;
+  total_employees: number;
+  active: number;
+  departed: number;
+  turnover_rate: number;
+  avg_tenure_at_departure_years: number;
+  median_tenure_at_departure_years: number;
 }
 
 interface TrendPoint {
   month: string;
-  turnover_rate: number;
+  departures: number;
 }
 
 interface DeptTurnover {
   department: string;
+  total: number;
+  active: number;
+  departed: number;
   turnover_rate: number;
+  avg_tenure_at_departure: number;
 }
 
 interface TenureBucket {
-  bucket: string;
+  bin: string;
   count: number;
 }
 
 interface DangerZone {
   department: string;
-  turnover_rate: number;
+  total: number;
   departed: number;
-  headcount: number;
+  turnover_rate: number;
+  company_avg: number;
+  excess_pct: number;
 }
 
 export function Turnover() {
@@ -63,7 +71,7 @@ export function Turnover() {
         setTrend(trendRes.data?.data || trendRes.data || []);
         setDeptTurnover(deptRes.data?.data || deptRes.data || []);
         setTenureAtDep(tenureRes.data?.data || tenureRes.data || []);
-        setDangerZones(dangerRes.data?.data || dangerRes.data || []);
+        setDangerZones(dangerRes.data?.danger_zones || dangerRes.data?.data || dangerRes.data || []);
       } catch (err) {
         console.error('Turnover load error', err);
       } finally {
@@ -88,10 +96,10 @@ export function Turnover() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="Turnover Rate" value={summary?.overall_turnover_rate ?? 0} format="percent" icon={<Percent size={18} />} color="#fb7185" delay={0} loading={kpiLoading} />
-        <KpiCard label="Avg Tenure at Departure" value={summary?.avg_tenure_at_departure ?? 0} icon={<Clock size={18} />} color="#a78bfa" delay={60} loading={kpiLoading} />
-        <KpiCard label="Total Departed" value={summary?.total_departed ?? 0} icon={<UserMinus size={18} />} color="#fbbf24" delay={120} loading={kpiLoading} />
-        <KpiCard label="Danger Zones" value={summary?.danger_zone_count ?? 0} icon={<AlertTriangle size={18} />} color="#fb7185" delay={180} loading={kpiLoading} />
+        <KpiCard label="Turnover Rate" value={summary?.turnover_rate ?? 0} format="percent" icon={<Percent size={18} />} color="#fb7185" delay={0} loading={kpiLoading} />
+        <KpiCard label="Avg Tenure at Departure" value={summary?.avg_tenure_at_departure_years ?? 0} icon={<Clock size={18} />} color="#a78bfa" delay={60} loading={kpiLoading} />
+        <KpiCard label="Total Departed" value={summary?.departed ?? 0} icon={<UserMinus size={18} />} color="#fbbf24" delay={120} loading={kpiLoading} />
+        <KpiCard label="Danger Zones" value={dangerZones.length} icon={<AlertTriangle size={18} />} color="#fb7185" delay={180} loading={kpiLoading} />
       </div>
 
       {/* Trend + Department */}
@@ -108,7 +116,7 @@ export function Turnover() {
                 <XAxis dataKey="month" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} />
-                <Line type="monotone" dataKey="turnover_rate" stroke={CHART_COLORS[5]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[5] }} activeDot={{ r: 5 }} name="Turnover %" />
+                <Line type="monotone" dataKey="departures" stroke={CHART_COLORS[5]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[5] }} activeDot={{ r: 5 }} name="Departures" />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -148,7 +156,7 @@ export function Turnover() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={tenureAtDep}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis dataKey="bucket" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="bin" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="count" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} name="Employees" />
@@ -185,7 +193,7 @@ export function Turnover() {
                 }}
               >
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Department</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Headcount</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Departed</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rate</span>
               </div>
@@ -204,7 +212,7 @@ export function Turnover() {
                   className="hover:bg-white/[0.02]"
                 >
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{zone.department}</span>
-                  <span style={{ fontSize: 12, color: '#a1a1aa', textAlign: 'right' }}>{zone.headcount}</span>
+                  <span style={{ fontSize: 12, color: '#a1a1aa', textAlign: 'right' }}>{zone.total}</span>
                   <span style={{ fontSize: 12, color: '#a1a1aa', textAlign: 'right' }}>{zone.departed}</span>
                   <Badge label={`${zone.turnover_rate.toFixed(1)}%`} color="#fb7185" dot />
                 </div>

@@ -19,10 +19,13 @@ interface CareerSummary {
 }
 
 interface StuckEmployee {
-  pk_person: string;
+  PK_PERSON: number;
   job_title: string;
   department: string;
   time_in_current_role_days: number;
+  tenure_years: number;
+  grade: string;
+  grade_band: string;
 }
 
 interface DeptVelocity {
@@ -33,7 +36,6 @@ interface DeptVelocity {
 interface CareerPath {
   path: string[];
   count: number;
-  steps: number;
 }
 
 export function Careers() {
@@ -50,12 +52,12 @@ export function Careers() {
           api.get('/api/careers/summary'),
           api.get('/api/careers/stuck-employees'),
           api.get('/api/careers/career-paths'),
-          api.get('/api/careers/by-department'),
+          api.get('/api/careers/promotion-velocity'),
         ]);
         setSummary(sumRes.data);
         setStuck(stuckRes.data.employees ?? stuckRes.data ?? []);
-        setPaths(pathsRes.data.paths ?? pathsRes.data ?? []);
-        setDeptVelocity(deptRes.data.departments ?? deptRes.data ?? []);
+        setPaths([...(pathsRes.data.two_step_paths ?? []), ...(pathsRes.data.three_step_paths ?? [])]);
+        setDeptVelocity(deptRes.data.by_department ?? deptRes.data ?? []);
       } catch (e) {
         console.error('Careers load error', e);
       } finally {
@@ -194,9 +196,9 @@ export function Careers() {
                 ))}
                 {/* Rows */}
                 {stuck.map((emp, i) => (
-                  <div key={emp.pk_person ?? i} style={{ display: 'contents' }}>
+                  <div key={emp.PK_PERSON ?? i} style={{ display: 'contents' }}>
                     <div style={{ padding: '10px 12px', color: '#71717a', fontFamily: 'monospace', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      {emp.pk_person}
+                      {emp.PK_PERSON}
                     </div>
                     <div style={{ padding: '10px 12px', color: '#d4d4d8', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                       {emp.job_title}

@@ -13,32 +13,37 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 interface TenureSummary {
-  avg_tenure_overall: number;
-  avg_tenure_active: number;
-  median_tenure: number;
-  long_tenured_count: number;
+  overall_avg_tenure_years: number;
+  active_avg_tenure_years: number;
+  overall_median_tenure_years: number;
+  total_employees: number;
+  active_count: number;
+  departed_count: number;
 }
 
 interface Cohort {
   cohort: string;
-  count: number;
+  total: number;
+  active: number;
+  departed: number;
 }
 
 interface DistBucket {
-  bucket: string;
+  bin: string;
   count: number;
 }
 
 interface RetentionPoint {
   year: number;
-  pct_retained: number;
+  survived: number;
+  retention_pct: number;
 }
 
 interface LongTenured {
-  name: string;
+  pk_person: number;
+  job_title: string;
   department: string;
   tenure_years: number;
-  hire_date: string;
 }
 
 const COHORT_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb7185', '#FF8A4C', '#22d3ee'];
@@ -87,10 +92,10 @@ export function Tenure() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="Avg Tenure (Overall)" value={summary?.avg_tenure_overall ?? 0} icon={<Clock size={18} />} color="#FF8A4C" delay={0} loading={kpiLoading} />
-        <KpiCard label="Avg Tenure (Active)" value={summary?.avg_tenure_active ?? 0} icon={<Users size={18} />} color="#34d399" delay={60} loading={kpiLoading} />
-        <KpiCard label="Median Tenure" value={summary?.median_tenure ?? 0} icon={<TrendingUp size={18} />} color="#a78bfa" delay={120} loading={kpiLoading} />
-        <KpiCard label="Long Tenured (10yr+)" value={summary?.long_tenured_count ?? 0} icon={<Award size={18} />} color="#fbbf24" delay={180} loading={kpiLoading} />
+        <KpiCard label="Avg Tenure (Overall)" value={summary?.overall_avg_tenure_years ?? 0} icon={<Clock size={18} />} color="#FF8A4C" delay={0} loading={kpiLoading} />
+        <KpiCard label="Avg Tenure (Active)" value={summary?.active_avg_tenure_years ?? 0} icon={<Users size={18} />} color="#34d399" delay={60} loading={kpiLoading} />
+        <KpiCard label="Median Tenure" value={summary?.overall_median_tenure_years ?? 0} icon={<TrendingUp size={18} />} color="#a78bfa" delay={120} loading={kpiLoading} />
+        <KpiCard label="Long Tenured (10yr+)" value={longTenured.length} icon={<Award size={18} />} color="#fbbf24" delay={180} loading={kpiLoading} />
       </div>
 
       {/* Cohort + Distribution */}
@@ -182,7 +187,7 @@ export function Tenure() {
                   tickFormatter={(v) => `${v}%`}
                 />
                 <Tooltip content={<ChartTooltip />} />
-                <Area type="stepAfter" dataKey="pct_retained" stroke={CHART_COLORS[1]} fill="url(#retGrad)" strokeWidth={2} name="% Retained" />
+                <Area type="stepAfter" dataKey="retention_pct" stroke={CHART_COLORS[1]} fill="url(#retGrad)" strokeWidth={2} name="% Retained" />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -209,7 +214,7 @@ export function Tenure() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr auto auto',
+                  gridTemplateColumns: '1fr 1fr auto',
                   gap: 12,
                   padding: '8px 12px',
                   borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -219,10 +224,9 @@ export function Tenure() {
                   zIndex: 1,
                 }}
               >
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Job Title</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Department</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tenure</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hire Date</span>
               </div>
               {/* Rows */}
               {longTenured.map((emp, i) => {
@@ -232,7 +236,7 @@ export function Tenure() {
                     key={i}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 1fr auto auto',
+                      gridTemplateColumns: '1fr 1fr auto',
                       gap: 12,
                       padding: '10px 12px',
                       borderBottom: '1px solid rgba(255,255,255,0.03)',
@@ -240,10 +244,9 @@ export function Tenure() {
                     }}
                     className="hover:bg-white/[0.02]"
                   >
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{emp.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{emp.job_title}</span>
                     <span style={{ fontSize: 12, color: '#a1a1aa' }}>{emp.department}</span>
                     <Badge label={`${emp.tenure_years.toFixed(1)} yrs`} color={tenureColor} dot />
-                    <span style={{ fontSize: 11, color: '#71717a' }}>{emp.hire_date}</span>
                   </div>
                 );
               })}
