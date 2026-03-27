@@ -138,15 +138,25 @@ def report_generate_runner(run_id: int, cancel_event: threading.Event, loop: asy
         loop.run_until_complete(run_manager.cancel_run(run_id))
         return
 
-    # Build context and call LLM
+    # Build context and call LLM (with local fallback)
     try:
-        from ..routers.reports import _build_report_context, _llm_call
+        from ..routers.reports import _build_report_context, _llm_call, _generate_local_summary
 
         context = _build_report_context()
         loop.run_until_complete(run_manager.update_progress(run_id, 1, 2, "Calling LLM"))
 
-        system = "You are an HR analytics expert. Write a comprehensive executive summary."
-        summary = loop.run_until_complete(_llm_call(system, context))
+        try:
+            system = (
+                "You are a senior HR analytics consultant writing an executive summary for the CHRO. "
+                "Write a professional, data-driven executive summary covering: "
+                "1. Overall Workforce Health 2. Key Risk Areas 3. Career Mobility "
+                "4. Geographic Distribution 5. Recommendations. Use markdown formatting."
+            )
+            summary = loop.run_until_complete(_llm_call(system, f"Generate an executive summary:\n\n{context}"))
+            loop.run_until_complete(run_manager.append_log(run_id, "LLM summary generated"))
+        except Exception as llm_err:
+            loop.run_until_complete(run_manager.append_log(run_id, f"LLM unavailable ({llm_err}), using local generator"))
+            summary = _generate_local_summary()
 
         # Save to file
         output_dir = os.environ.get("OUTPUT_DIR", "output")
