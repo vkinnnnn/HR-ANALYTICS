@@ -166,18 +166,97 @@ Departments: {df['department_name'].nunique()} | Countries: {df['country'].nuniq
     bu_lines = [f"  {bu}: {n}" for bu, n in bu_stats.items()]
     sections.append("BUSINESS UNITS (active, top 10):\n" + "\n".join(bu_lines))
 
+    # ── Cohort analysis (hire year retention) ──
+    if "hire_year" in df.columns:
+        cohort_lines = []
+        for year in sorted(df["hire_year"].dropna().unique())[-5:]:
+            cohort = df[df["hire_year"] == year]
+            ct = len(cohort)
+            still_active = int(cohort["is_active"].sum())
+            retention = round(still_active / ct * 100, 1) if ct > 0 else 0
+            cohort_lines.append(f"  {int(year)} cohort: {ct} hired, {still_active} remain ({retention}% retention)")
+        if cohort_lines:
+            sections.append("HIRE COHORT RETENTION (last 5 years):\n" + "\n".join(cohort_lines))
+
+    # ── Manager deep dive (top/bottom by retention) ──
+    try:
+        mgr_df = get_current_managers()
+        span = get_manager_span()
+        # Managers with 3+ reports for meaningful analysis
+        big_mgrs = span[span["direct_reports"] >= 3]
+        if len(big_mgrs) > 0:
+            mgr_retention = []
+            for _, mrow in big_mgrs.iterrows():
+                mid = mrow["manager_id"]
+                reports = mgr_df[mgr_df["fk_direct_manager"] == mid]["pk_user"].values
+                report_emps = df[df["PK_PERSON"].isin(reports)]
+                if len(report_emps) > 0:
+                    ret_rate = round(report_emps["is_active"].mean() * 100, 1)
+                    mgr_retention.append({"manager_id": mid, "reports": int(mrow["direct_reports"]), "retention": ret_rate})
+            if mgr_retention:
+                mgr_retention.sort(key=lambda x: x["retention"])
+                worst_mgrs = mgr_retention[:3]
+                best_mgrs = sorted(mgr_retention, key=lambda x: -x["retention"])[:3]
+                mgr_lines = ["  LOWEST RETENTION MANAGERS (possible revolving doors):"]
+                for m in worst_mgrs:
+                    mgr_lines.append(f"    Manager {m['manager_id']}: {m['reports']} reports, {m['retention']}% retention")
+                mgr_lines.append("  HIGHEST RETENTION MANAGERS:")
+                for m in best_mgrs:
+                    mgr_lines.append(f"    Manager {m['manager_id']}: {m['reports']} reports, {m['retention']}% retention")
+                sections.append("MANAGER RETENTION ANALYSIS:\n" + "\n".join(mgr_lines))
+    except Exception:
+        pass
+
+    # ── Cross-metric correlations ──
+    correlations = []
+    # High manager changes → higher departure?
+    if "num_manager_changes" in active.columns:
+        high_mgr_chg = df[df["num_manager_changes"] >= 3]
+        low_mgr_chg = df[df["num_manager_changes"] < 3]
+        if len(high_mgr_chg) > 0 and len(low_mgr_chg) > 0:
+            high_dep_rate = round((~high_mgr_chg["is_active"]).mean() * 100, 1)
+            low_dep_rate = round((~low_mgr_chg["is_active"]).mean() * 100, 1)
+            if high_dep_rate > low_dep_rate * 1.2:
+                correlations.append(f"Employees with 3+ manager changes have {high_dep_rate}% departure rate vs {low_dep_rate}% for those with fewer changes")
+    # Stuck employees → higher departure?
+    if "time_in_current_role_days" in df.columns:
+        stuck = df[df["time_in_current_role_days"] > 1095]
+        not_stuck = df[df["time_in_current_role_days"] <= 1095]
+        if len(stuck) > 0 and len(not_stuck) > 0:
+            stuck_dep = round((~stuck["is_active"]).mean() * 100, 1)
+            not_stuck_dep = round((~not_stuck["is_active"]).mean() * 100, 1)
+            if stuck_dep != not_stuck_dep:
+                correlations.append(f"Employees 3+ years in same role: {stuck_dep}% departed vs {not_stuck_dep}% for others")
+    # Title changes → retention?
+    if "num_actual_title_changes" in df.columns:
+        promoted = df[df["num_actual_title_changes"] > 0]
+        not_promoted = df[df["num_actual_title_changes"] == 0]
+        if len(promoted) > 0 and len(not_promoted) > 0:
+            p_ret = round(promoted["is_active"].mean() * 100, 1)
+            np_ret = round(not_promoted["is_active"].mean() * 100, 1)
+            correlations.append(f"Employees with title changes: {p_ret}% still active vs {np_ret}% for those without")
+    if correlations:
+        sections.append("CROSS-METRIC CORRELATIONS:\n" + "\n".join(f"  📊 {c}" for c in correlations))
+
+    # ── Org structure depth ──
+    try:
+        hist = get_history()
+        # Approximate hierarchy depth from manager chains
+        unique_managers = hist["fk_direct_manager"].nunique()
+        unique_employees = hist["pk_user"].nunique()
+        mgr_to_emp_ratio = round(unique_managers / unique_employees * 100, 1) if unique_employees > 0 else 0
+        sections.append(f"ORG STRUCTURE:\n  Unique managers in hierarchy: {unique_managers}\n  Manager-to-employee ratio: {mgr_to_emp_ratio}%\n  Departments: {df['department_name'].nunique()}\n  Business units: {df['business_unit_name'].nunique()}")
+    except Exception:
+        pass
+
     # ── Anomalies / alerts ──
     anomalies = []
-    # Departments with 100% turnover
     full_churn = dept_stats[dept_stats["turnover_pct"] >= 100]
     if len(full_churn) > 0:
         anomalies.append(f"{len(full_churn)} departments have 100% turnover: {', '.join(str(d) for d in full_churn.index[:5])}")
-    # High early attrition
     early_dep = departed[departed["tenure_years"] < 1]
     if len(early_dep) > 0:
         anomalies.append(f"{len(early_dep)} employees departed within first year ({round(len(early_dep)/departed_count*100,1)}% of all departures)")
-    # No recent hires
-    import pandas as pd
     recent_hires = df[df["Hire"] >= (pd.Timestamp.now() - pd.Timedelta(days=90))]
     if len(recent_hires) == 0:
         anomalies.append("No new hires in the last 90 days")
@@ -227,35 +306,50 @@ def _get_page_specific_context(page: str, df, active, departed, hist, filters) -
 
 # ─── System Prompt ──────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are Workforce AI — a senior People Analytics consultant embedded in an HR workforce intelligence platform called Workforce IQ.
+SYSTEM_PROMPT = """You are Workforce AI — a senior People Analytics consultant embedded in Workforce IQ, an HR intelligence platform.
 
-You have access to comprehensive workforce data. Your role is to provide deep, actionable analysis — not just answer questions, but proactively identify patterns, root causes, and recommend actions.
+You have comprehensive workforce data. Provide deep, actionable analysis — identify patterns, root causes, and recommend actions.
 
 ANALYSIS PRINCIPLES:
-1. Always lead with the specific number, then explain what it means
-2. Compare metrics to benchmarks (industry avg turnover is 15-20%, avg tenure is 4.1yr per BLS)
-3. Identify root causes, not just symptoms (high turnover → check tenure at departure, manager changes, grade stagnation)
+1. Lead with the specific number, then explain what it means
+2. Compare to benchmarks (industry avg turnover: 15-20%, avg tenure: 4.1yr per BLS, healthy span of control: 5-8)
+3. Identify root causes, not symptoms (high turnover → check tenure at departure, manager changes, grade stagnation)
 4. Provide actionable recommendations with expected impact
 5. Flag anomalies and risks proactively
-6. When comparing departments, normalize by headcount
-7. Reference specific employees/managers by department (not PII)
-8. Suggest follow-up analyses the user should explore
+6. Normalize by headcount when comparing groups
+7. Reference departments/roles not individual names
+
+METRIC DEFINITIONS (use when asked "how is this calculated?"):
+- Turnover rate = departed / total employees × 100 (all-time, unless time period specified)
+- Tenure = (today or departure date) − hire date
+- Span of control = count of direct reports per manager (from fk_direct_manager)
+- Flight risk = ML model (LogisticRegression) using: tenure, time_in_role, manager_changes, title_changes
+- Promotion = actual job title change between consecutive history records
+- Stuck employee = active employee with 3+ years in same role (time_in_current_role_days > 1095)
+
+COHORT ANALYSIS: When asked to compare groups, build cohorts by hire year, department, grade, or tenure band and compare retention rates, promotion velocity, and mobility metrics.
+
+AMBIGUITY: If a question is ambiguous, make your best interpretation based on the page context, but note your assumption. Example: "Interpreting 'turnover' as all departures (not just voluntary). If you meant voluntary only, that breakdown isn't available in the current dataset."
+
+DATA STORYTELLING: For executive questions (health, summary, overview), structure as:
+1. Headline metric with benchmark comparison
+2. What changed or what's notable
+3. Top 2-3 risk areas with specific numbers
+4. 2-3 recommended actions
 
 RESPONSE FORMAT:
-- Use **bold** for key numbers and findings
-- Use bullet points for lists
-- Be concise but thorough — a CHRO reads this, not a data engineer
-- When data supports a visualization, include it (see chart format below)
+- **Bold** key numbers and findings
+- Bullet points for lists, tables for comparisons
+- Be concise but thorough — CHROs read this
+- One chart per response when it adds value
 
-CHART FORMAT:
-When your answer would benefit from a chart, include EXACTLY ONE JSON block at the end:
+CHART FORMAT (include EXACTLY ONE when relevant):
 ```json
-{{"chart_type": "bar|pie|line|area", "labels": [...], "values": [...], "title": "...", "highlight": "optional_label_to_highlight"}}
+{{"chart_type": "bar|pie|line|area", "labels": [...], "values": [...], "title": "...", "highlight": "optional_label"}}
 ```
 
-FOLLOW-UP SUGGESTIONS:
-At the very end of your response, add a line starting with "SUGGESTIONS:" followed by 2-3 follow-up questions the user might want to ask, separated by " | ". Example:
-SUGGESTIONS: What's driving the high turnover in Customer Success? | Compare Technology vs Product retention | Show me employees at risk of leaving in the next 90 days
+FOLLOW-UP SUGGESTIONS (ALWAYS include):
+End with: SUGGESTIONS: question 1 | question 2 | question 3
 
 {context}
 """
