@@ -104,6 +104,39 @@
 - `frontend/src/pages/Dashboard.tsx` — turnover avg fix, NaN→Untitled Role
 - `frontend/src/index.css` — orbGlow, dotBounce, fire-orb-fallback
 
+### Session 10c — Deep Analysis Chatbot Engine
+
+**Backend chat.py complete rewrite:**
+1. **Deep context builder** — comprehensive data context with:
+   - Department stats (active/departed/turnover/avg tenure/avg role changes/time in role per dept)
+   - Flight risk top 10 with scores, tenure, time in role
+   - Manager metrics (total, avg/max span, overhead, overload counts)
+   - Career mobility (role changes, title changes, stuck 3yr+/5yr+ counts)
+   - Grade band + grade title distributions
+   - Tenure distribution in meaningful bins
+   - Country/function family/business unit breakdowns
+   - Auto-detected anomalies (100% turnover depts, early attrition, no recent hires)
+   - Page-specific deep context (turnover trends, promotion data, manager spans)
+
+2. **Senior analyst system prompt** — "Workforce AI" acts as senior People Analytics consultant:
+   - Leads with specific numbers, compares to industry benchmarks
+   - Identifies root causes not just symptoms
+   - Provides actionable recommendations
+   - Always suggests follow-up analyses (SUGGESTIONS: format)
+
+3. **Multi-turn conversation** — sends last 6 turns as conversation_history to LLM for context continuity
+
+4. **Analysis type detection** — classifies queries as: comparative, trend, root_cause, predictive, risk, recommendation, descriptive
+
+5. **Follow-up suggestions** — AI returns 2-3 follow-up questions parsed from response, rendered as clickable orange pills below each AI message
+
+6. **Rich local fallback** — pattern-matching for turnover, tenure, headcount, risk, stuck employees, department-specific queries — all with chart data and suggestions
+
+**Frontend ChatPanel updates:**
+- ChatMessage type: added `suggestions`, `analysis_type` fields
+- sendMessage: includes `conversation_history` in API call
+- Follow-up suggestion pills: rendered below AI messages, clickable to auto-send
+
 **Known Issues:**
 - new_hires_90d = 0 because dataset is historical (no hires in last 90 days). This is correct data behavior.
 - Port 8000 had zombie processes on Windows; running on port 8003

@@ -1,13 +1,15 @@
 """
-AI Chatbot Router — Natural language Q&A over workforce analytics data.
+AI Chatbot Router — Deep workforce analytics Q&A with multi-turn context,
+drill-down analysis, comparative insights, and follow-up suggestions.
 """
 
 import os
+import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..data_loader import get_employees, is_loaded
-from ..llm import llm_call as _llm_call_unified
+from ..data_loader import get_employees, get_history, get_manager_span, is_loaded
+from ..llm import llm_call as _llm_call_raw
 
 router = APIRouter()
 
@@ -16,253 +18,361 @@ class ChatQuery(BaseModel):
     question: str
     current_page: str | None = None
     filters: dict | None = None
+    conversation_history: list[dict] | None = None  # Multi-turn support
 
 
 class ChatResponse(BaseModel):
     answer: str
     data: dict | None = None
+    suggestions: list[str] | None = None
+    analysis_type: str | None = None
 
 
-async def _llm_call(system: str, user: str) -> str:
-    return await _llm_call_unified(system, user)
+# ─── Deep Context Builder ───────────────────────────────────────────
 
-
-def _build_workforce_context() -> str:
-    """Build a rich summary-stats context string from the employee DataFrame."""
+def _build_deep_context(current_page: str | None = None, filters: dict | None = None) -> str:
+    """Build comprehensive data context with page-specific deep analytics."""
     df = get_employees()
+    hist = get_history()
+    active = df[df["is_active"]]
+    departed = df[~df["is_active"]]
 
     total = len(df)
-    active_count = int(df["is_active"].sum())
-    departed_count = total - active_count
-    turnover_rate = round(departed_count / total * 100, 1) if total > 0 else 0.0
+    active_count = len(active)
+    departed_count = len(departed)
+    turnover_rate = round(departed_count / total * 100, 1) if total > 0 else 0
 
-    # Tenure stats
-    avg_tenure_years = round(float(df["tenure_years"].mean()), 1)
-    median_tenure_years = round(float(df["tenure_years"].median()), 1)
+    avg_tenure = round(float(df["tenure_years"].mean()), 1)
+    median_tenure = round(float(df["tenure_years"].median()), 1)
+    active_avg_tenure = round(float(active["tenure_years"].mean()), 1)
+    departed_avg_tenure = round(float(departed["tenure_years"].mean()), 1) if len(departed) > 0 else 0
 
-    # Top departments by headcount
-    dept_counts = (
-        df[df["is_active"]]
-        .groupby("department_name")
-        .size()
-        .sort_values(ascending=False)
-        .head(10)
-    )
-    dept_lines = "\n".join(
-        f"  - {dept}: {count} active employees"
-        for dept, count in dept_counts.items()
-    )
+    sections = []
 
-    # Top business units
-    bu_counts = (
-        df[df["is_active"]]
-        .groupby("business_unit_name")
-        .size()
-        .sort_values(ascending=False)
-        .head(10)
-    )
-    bu_lines = "\n".join(
-        f"  - {bu}: {count} active employees"
-        for bu, count in bu_counts.items()
-    )
+    # ── Core metrics ──
+    sections.append(f"""WORKFORCE OVERVIEW
+Total: {total} | Active: {active_count} | Departed: {departed_count}
+Turnover rate: {turnover_rate}%
+Avg tenure: {avg_tenure}yr (active: {active_avg_tenure}yr, departed at exit: {departed_avg_tenure}yr)
+Median tenure: {median_tenure}yr
+Departments: {df['department_name'].nunique()} | Countries: {df['country'].nunique() if 'country' in df.columns else 'N/A'}
+""")
 
-    # Grade distribution (active)
+    # ── Department deep dive ──
+    dept_stats = df.groupby("department_name").agg(
+        total=("is_active", "count"),
+        active=("is_active", "sum"),
+        departed=("is_active", lambda x: int((~x).sum())),
+        avg_tenure=("tenure_years", "mean"),
+        avg_role_changes=("num_role_changes", "mean"),
+        avg_time_in_role=("time_in_current_role_days", "mean"),
+    ).round(1)
+    dept_stats["turnover_pct"] = (dept_stats["departed"] / dept_stats["total"] * 100).round(1)
+    dept_stats = dept_stats.sort_values("total", ascending=False)
+
+    dept_lines = []
+    for dept, row in dept_stats.head(15).iterrows():
+        dept_lines.append(
+            f"  {dept}: {int(row['active'])}active/{int(row['departed'])}dep "
+            f"(turnover {row['turnover_pct']}%, avg tenure {row['avg_tenure']}yr, "
+            f"avg {row['avg_role_changes']:.1f} role changes, "
+            f"avg {int(row['avg_time_in_role'])}d in current role)"
+        )
+    sections.append("DEPARTMENTS (top 15):\n" + "\n".join(dept_lines))
+
+    # ── Flight risk data ──
+    try:
+        from ..routers.predictions import _compute_flight_risk
+        risk_data = _compute_flight_risk(top_n=10)
+        if risk_data:
+            risk_lines = []
+            for emp in risk_data[:10]:
+                title = emp.get("job_title", "Unknown")
+                if title == "nan" or not title:
+                    title = "Untitled Role"
+                risk_lines.append(
+                    f"  {title} ({emp.get('department','?')}) — "
+                    f"risk: {emp.get('risk_score',0)*100:.0f}%, "
+                    f"tenure: {emp.get('tenure_years',0):.1f}yr, "
+                    f"time in role: {emp.get('time_in_current_role_days',0)}d"
+                )
+            sections.append("TOP FLIGHT RISKS:\n" + "\n".join(risk_lines))
+    except Exception:
+        pass
+
+    # ── Manager analytics ──
+    try:
+        span = get_manager_span()
+        avg_span = round(float(span["direct_reports"].mean()), 1)
+        max_span = int(span["direct_reports"].max())
+        total_managers = len(span)
+        sections.append(f"""MANAGER METRICS:
+  Total managers: {total_managers}
+  Avg span of control: {avg_span} direct reports
+  Max span: {max_span} direct reports
+  Managers with 1 report (potential overhead): {int((span['direct_reports']==1).sum())}
+  Managers with 10+ reports (potential overload): {int((span['direct_reports']>=10).sum())}""")
+    except Exception:
+        pass
+
+    # ── Career mobility ──
+    avg_role_changes = round(float(active["num_role_changes"].mean()), 1)
+    avg_manager_changes = round(float(active["num_manager_changes"].mean()), 1)
+    avg_title_changes = round(float(active["num_actual_title_changes"].mean()), 1) if "num_actual_title_changes" in active.columns else 0
+    avg_time_in_role = int(active["time_in_current_role_days"].mean())
+    stuck_3yr = int((active["time_in_current_role_days"] > 1095).sum())
+    stuck_5yr = int((active["time_in_current_role_days"] > 1825).sum())
+
+    sections.append(f"""CAREER MOBILITY (active employees):
+  Avg role changes: {avg_role_changes} | Avg title changes: {avg_title_changes}
+  Avg manager changes: {avg_manager_changes}
+  Avg time in current role: {avg_time_in_role} days ({round(avg_time_in_role/365,1)}yr)
+  Employees stuck 3+ years in same role: {stuck_3yr} ({round(stuck_3yr/active_count*100,1)}%)
+  Employees stuck 5+ years in same role: {stuck_5yr} ({round(stuck_5yr/active_count*100,1)}%)""")
+
+    # ── Grade distribution ──
+    if "grade_band" in df.columns:
+        grade_dist = active.groupby("grade_band").size().sort_values(ascending=False)
+        grade_lines = [f"  {band}: {count}" for band, count in grade_dist.items()]
+        sections.append("GRADE BANDS (active):\n" + "\n".join(grade_lines))
+
     if "grade_title" in df.columns:
-        grade_counts = (
-            df[df["is_active"]]
-            .groupby("grade_title")
-            .size()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-        grade_lines = "\n".join(
-            f"  - {grade}: {count}" for grade, count in grade_counts.items()
-        )
-    else:
-        grade_lines = "  (grade data not available)"
+        grade_counts = active.groupby("grade_title").size().sort_values(ascending=False).head(10)
+        grade_lines = [f"  {g}: {c}" for g, c in grade_counts.items()]
+        sections.append("TOP GRADES (active):\n" + "\n".join(grade_lines))
 
-    # Country distribution (active)
+    # ── Tenure distribution ──
+    import pandas as pd
+    tenure_bins = [0, 0.5, 1, 2, 3, 5, 10, float("inf")]
+    tenure_labels = ["0-6mo", "6-12mo", "1-2yr", "2-3yr", "3-5yr", "5-10yr", "10yr+"]
+    tenure_dist = pd.cut(df["tenure_years"], bins=tenure_bins, labels=tenure_labels, right=False).value_counts().reindex(tenure_labels)
+    tenure_lines = [f"  {label}: {int(count)}" for label, count in tenure_dist.items()]
+    sections.append("TENURE DISTRIBUTION:\n" + "\n".join(tenure_lines))
+
+    # ── Country breakdown ──
     if "country" in df.columns:
-        country_counts = (
-            df[df["is_active"]]
-            .groupby("country")
-            .size()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-        country_lines = "\n".join(
-            f"  - {country}: {count}" for country, count in country_counts.items()
-        )
-    else:
-        country_lines = "  (country data not available)"
+        country_stats = active.groupby("country").size().sort_values(ascending=False).head(10)
+        country_lines = [f"  {c}: {n}" for c, n in country_stats.items()]
+        sections.append("COUNTRY (active, top 10):\n" + "\n".join(country_lines))
 
-    # Function distribution (active)
-    if "function_title" in df.columns:
-        func_counts = (
-            df[df["is_active"]]
-            .groupby("function_title")
-            .size()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-        func_lines = "\n".join(
-            f"  - {func}: {count}" for func, count in func_counts.items()
-        )
-    else:
-        func_lines = "  (function data not available)"
+    # ── Function families ──
+    if "function_family" in df.columns:
+        func_stats = active.groupby("function_family").size().sort_values(ascending=False).head(10)
+        func_lines = [f"  {f}: {n}" for f, n in func_stats.items()]
+        sections.append("FUNCTION FAMILIES (active):\n" + "\n".join(func_lines))
 
-    # Role change stats (active employees)
-    active_df = df[df["is_active"]]
-    avg_role_changes = round(float(active_df["num_role_changes"].mean()), 1)
-    avg_manager_changes = round(float(active_df["num_manager_changes"].mean()), 1)
-    avg_time_in_role = round(float(active_df["time_in_current_role_days"].mean()), 0)
+    # ── Business units ──
+    bu_stats = active.groupby("business_unit_name").size().sort_values(ascending=False).head(10)
+    bu_lines = [f"  {bu}: {n}" for bu, n in bu_stats.items()]
+    sections.append("BUSINESS UNITS (active, top 10):\n" + "\n".join(bu_lines))
 
-    # Turnover by department (top departments with highest departure rate)
-    dept_turnover = (
-        df.groupby("department_name")
-        .agg(total=("is_active", "count"), departed=("is_active", lambda x: int((~x).sum())))
-        .assign(turnover_pct=lambda x: (x["departed"] / x["total"] * 100).round(1))
-        .sort_values("turnover_pct", ascending=False)
-        .head(10)
-    )
-    turnover_lines = "\n".join(
-        f"  - {dept}: {row['turnover_pct']}% ({row['departed']}/{row['total']})"
-        for dept, row in dept_turnover.iterrows()
-    )
+    # ── Anomalies / alerts ──
+    anomalies = []
+    # Departments with 100% turnover
+    full_churn = dept_stats[dept_stats["turnover_pct"] >= 100]
+    if len(full_churn) > 0:
+        anomalies.append(f"{len(full_churn)} departments have 100% turnover: {', '.join(str(d) for d in full_churn.index[:5])}")
+    # High early attrition
+    early_dep = departed[departed["tenure_years"] < 1]
+    if len(early_dep) > 0:
+        anomalies.append(f"{len(early_dep)} employees departed within first year ({round(len(early_dep)/departed_count*100,1)}% of all departures)")
+    # No recent hires
+    import pandas as pd
+    recent_hires = df[df["Hire"] >= (pd.Timestamp.now() - pd.Timedelta(days=90))]
+    if len(recent_hires) == 0:
+        anomalies.append("No new hires in the last 90 days")
+    if anomalies:
+        sections.append("ANOMALIES DETECTED:\n" + "\n".join(f"  ⚠ {a}" for a in anomalies))
 
-    context = f"""WORKFORCE ANALYTICS DATA SUMMARY
-=================================
-Total employees in dataset: {total}
-Active employees: {active_count}
-Departed employees: {departed_count}
-Overall turnover rate: {turnover_rate}%
+    # ── Page-specific deep context ──
+    if current_page:
+        page_context = _get_page_specific_context(current_page, df, active, departed, hist, filters)
+        if page_context:
+            sections.append(f"PAGE-SPECIFIC CONTEXT ({current_page}):\n{page_context}")
 
-TENURE:
-  Average tenure: {avg_tenure_years} years
-  Median tenure: {median_tenure_years} years
+    return "\n\n".join(sections)
 
-CAREER MOBILITY (active employees):
-  Average role changes: {avg_role_changes}
-  Average manager changes: {avg_manager_changes}
-  Average time in current role: {int(avg_time_in_role)} days
 
-TOP DEPARTMENTS BY HEADCOUNT (active):
-{dept_lines}
+def _get_page_specific_context(page: str, df, active, departed, hist, filters) -> str:
+    """Extra deep context based on which page the user is viewing."""
+    if page in ("/turnover", "/turnover/"):
+        # Turnover trend by quarter
+        if departed["Expire"].notna().any():
+            qtr_dep = departed.groupby(departed["Expire"].dt.to_period("Q")).size().tail(8)
+            lines = [f"  {str(q)}: {c} departures" for q, c in qtr_dep.items()]
+            return "QUARTERLY DEPARTURES (last 8):\n" + "\n".join(lines)
 
-TOP BUSINESS UNITS (active):
-{bu_lines}
+    elif page in ("/careers", "/careers/"):
+        # Promotion data
+        if "num_actual_title_changes" in active.columns:
+            promoted = active[active["num_actual_title_changes"] > 0]
+            return f"Promoted employees: {len(promoted)} ({round(len(promoted)/len(active)*100,1)}%)\nAvg title changes: {round(float(promoted['num_actual_title_changes'].mean()),1)}"
 
-GRADE DISTRIBUTION (active, top 10):
-{grade_lines}
+    elif page in ("/managers", "/managers/"):
+        try:
+            span = get_manager_span()
+            top_mgrs = span.sort_values("direct_reports", ascending=False).head(5)
+            lines = [f"  Manager {row['manager_id']}: {row['direct_reports']} reports" for _, row in top_mgrs.iterrows()]
+            return "TOP MANAGERS BY SPAN:\n" + "\n".join(lines)
+        except Exception:
+            pass
 
-COUNTRY DISTRIBUTION (active, top 10):
-{country_lines}
+    elif page in ("/tenure", "/tenure/"):
+        long_tenured = active[active["tenure_years"] >= 10]
+        short_dep = departed[departed["tenure_years"] < 1]
+        return f"Long-tenured (10yr+): {len(long_tenured)} employees\nShort-tenure departures (<1yr): {len(short_dep)}"
 
-FUNCTION DISTRIBUTION (active, top 10):
-{func_lines}
+    return ""
 
-TURNOVER BY DEPARTMENT (highest turnover, top 10):
-{turnover_lines}
+
+# ─── System Prompt ──────────────────────────────────────────────────
+
+SYSTEM_PROMPT = """You are Workforce AI — a senior People Analytics consultant embedded in an HR workforce intelligence platform called Workforce IQ.
+
+You have access to comprehensive workforce data. Your role is to provide deep, actionable analysis — not just answer questions, but proactively identify patterns, root causes, and recommend actions.
+
+ANALYSIS PRINCIPLES:
+1. Always lead with the specific number, then explain what it means
+2. Compare metrics to benchmarks (industry avg turnover is 15-20%, avg tenure is 4.1yr per BLS)
+3. Identify root causes, not just symptoms (high turnover → check tenure at departure, manager changes, grade stagnation)
+4. Provide actionable recommendations with expected impact
+5. Flag anomalies and risks proactively
+6. When comparing departments, normalize by headcount
+7. Reference specific employees/managers by department (not PII)
+8. Suggest follow-up analyses the user should explore
+
+RESPONSE FORMAT:
+- Use **bold** for key numbers and findings
+- Use bullet points for lists
+- Be concise but thorough — a CHRO reads this, not a data engineer
+- When data supports a visualization, include it (see chart format below)
+
+CHART FORMAT:
+When your answer would benefit from a chart, include EXACTLY ONE JSON block at the end:
+```json
+{{"chart_type": "bar|pie|line|area", "labels": [...], "values": [...], "title": "...", "highlight": "optional_label_to_highlight"}}
+```
+
+FOLLOW-UP SUGGESTIONS:
+At the very end of your response, add a line starting with "SUGGESTIONS:" followed by 2-3 follow-up questions the user might want to ask, separated by " | ". Example:
+SUGGESTIONS: What's driving the high turnover in Customer Success? | Compare Technology vs Product retention | Show me employees at risk of leaving in the next 90 days
+
+{context}
 """
-    return context
 
 
-def _local_chat_response(question: str) -> str:
-    """Generate a data-driven response without LLM by pattern-matching the question."""
-    import re
+# ─── Response Parser ────────────────────────────────────────────────
+
+def _parse_response(raw: str) -> tuple[str, dict | None, list[str] | None]:
+    """Parse LLM response to extract text, chart_data, and suggestions."""
+    answer = raw
+    chart_data = None
+    suggestions = None
+
+    # Extract suggestions
+    if "SUGGESTIONS:" in answer:
+        parts = answer.split("SUGGESTIONS:")
+        answer = parts[0].strip()
+        suggestion_text = parts[1].strip()
+        suggestions = [s.strip() for s in suggestion_text.split("|") if s.strip()]
+
+    # Extract chart data
+    if "```json" in answer:
+        try:
+            json_start = answer.index("```json") + 7
+            json_end = answer.index("```", json_start)
+            json_str = answer[json_start:json_end].strip()
+            chart_data = json.loads(json_str)
+            answer = answer[:answer.index("```json")].strip()
+        except (ValueError, json.JSONDecodeError):
+            pass
+
+    return answer, chart_data, suggestions
+
+
+# ─── Local Fallback ─────────────────────────────────────────────────
+
+def _local_chat_response(question: str) -> tuple[str, dict | None, list[str] | None]:
+    """Data-driven response without LLM."""
     df = get_employees()
     active = df[df["is_active"]]
     departed = df[~df["is_active"]]
     q = question.lower()
 
-    # Turnover questions
     if any(w in q for w in ["turnover", "attrition", "leaving", "depart"]):
         total = len(df)
         dep = len(departed)
         rate = round(dep / total * 100, 1) if total > 0 else 0
-        dept_turnover = (
-            df.groupby("department_name")
-            .agg(total=("is_active", "count"), dep=("is_active", lambda x: int((~x).sum())))
+        dept_turnover = df.groupby("department_name").agg(
+            total=("is_active", "count"), dep=("is_active", lambda x: int((~x).sum()))
         )
         dept_turnover["pct"] = (dept_turnover["dep"] / dept_turnover["total"] * 100).round(1)
         worst = dept_turnover.sort_values("pct", ascending=False).head(5)
         lines = [f"**Overall turnover rate: {rate}%** ({dep} departed out of {total} total)\n", "**Highest turnover departments:**"]
         for dept, row in worst.iterrows():
             lines.append(f"- {dept}: {row['pct']}% ({int(row['dep'])}/{int(row['total'])})")
-        return "\n".join(lines) + "\n\n```json\n" + _chart_json("bar", list(worst.index), [float(v) for v in worst["pct"]], "Turnover by Department (%)") + "\n```"
+        chart = {"chart_type": "bar", "labels": list(worst.index), "values": [float(v) for v in worst["pct"]], "title": "Turnover by Department (%)"}
+        suggestions = ["Why is turnover so high in these departments?", "What's the avg tenure of departed employees?", "Which grades have highest attrition?"]
+        return "\n".join(lines), chart, suggestions
 
-    # Tenure questions
     if any(w in q for w in ["tenure", "how long", "years of service"]):
         avg_t = round(float(active["tenure_years"].mean()), 1)
         med_t = round(float(active["tenure_years"].median()), 1)
-        return f"**Average tenure:** {avg_t} years\n**Median tenure:** {med_t} years\n\nActive employees: {len(active)}"
+        text = f"**Active employee tenure:** avg {avg_t}yr, median {med_t}yr\n**Total active:** {len(active)}"
+        return text, None, ["Who has the longest tenure?", "Show tenure by department", "Early departure patterns"]
 
-    # Headcount / workforce questions
-    if any(w in q for w in ["headcount", "how many", "employee count", "workforce"]):
-        dept_counts = active.groupby("department_name").size().sort_values(ascending=False).head(10)
+    if any(w in q for w in ["headcount", "how many", "employee", "workforce", "health", "summary", "overview"]):
+        dept_counts = active.groupby("department_name").size().sort_values(ascending=False).head(8)
         lines = [f"**Total active employees: {len(active)}** (out of {len(df)} total)\n", "**Top departments:**"]
         for dept, count in dept_counts.items():
             lines.append(f"- {dept}: {count}")
-        return "\n".join(lines)
+        chart = {"chart_type": "bar", "labels": list(dept_counts.index), "values": [int(v) for v in dept_counts.values], "title": "Headcount by Department"}
+        return "\n".join(lines), chart, ["What's our turnover rate?", "Show me flight risks", "Tenure distribution"]
+
+    if any(w in q for w in ["risk", "flight", "danger", "leaving soon"]):
+        text = (
+            f"**{len(active)} active employees** are scored for flight risk.\n"
+            f"Key risk factors: time in current role, tenure, manager changes, grade stagnation.\n"
+            f"Visit the **Flight Risk** page for the full scored list."
+        )
+        return text, None, ["Who are the top 10 highest risk?", "Risk breakdown by department", "What drives flight risk?"]
+
+    if any(w in q for w in ["stuck", "stagnant", "same role"]):
+        stuck = active[active["time_in_current_role_days"] > 1095]
+        text = f"**{len(stuck)} employees** have been in the same role for 3+ years ({round(len(stuck)/len(active)*100,1)}% of active workforce)."
+        return text, None, ["Show stuck employees by department", "What's the avg time in role?", "Promotion velocity analysis"]
 
     # Department-specific
-    dept_match = None
     for dept in df["department_name"].unique():
-        if dept.lower() in q:
-            dept_match = dept
-            break
-    if dept_match:
-        d = df[df["department_name"] == dept_match]
-        act = int(d["is_active"].sum())
-        dep_c = len(d) - act
-        avg_t = round(float(d["tenure_years"].mean()), 1)
-        return f"**{dept_match}:** {len(d)} total, {act} active, {dep_c} departed\n**Avg tenure:** {avg_t} years\n**Turnover:** {round(dep_c/len(d)*100,1)}%"
+        if str(dept).lower() in q:
+            d = df[df["department_name"] == dept]
+            act = int(d["is_active"].sum())
+            dep_c = len(d) - act
+            avg_t = round(float(d["tenure_years"].mean()), 1)
+            text = f"**{dept}:** {len(d)} total, {act} active, {dep_c} departed\n**Turnover:** {round(dep_c/len(d)*100,1)}%\n**Avg tenure:** {avg_t}yr"
+            return text, None, [f"Who's at risk in {dept}?", f"Compare {dept} to company avg", f"Show {dept} tenure distribution"]
 
-    # Risk questions
-    if any(w in q for w in ["risk", "flight", "danger"]):
-        return "Flight risk analysis requires the ML model to be trained. Visit the **Flight Risk** page and ensure the model has been trained. Key risk factors include: tenure, time in current role, manager changes, and grade stagnation."
-
-    # Default
-    return (
-        f"I have data on **{len(df)} employees** ({len(active)} active, {len(departed)} departed). "
-        f"I can answer questions about **turnover, tenure, headcount, departments, grades, and career mobility**. "
-        f"Try asking: 'What is the turnover rate?' or 'Tell me about the Technology department'.\n\n"
-        f"*Note: Set `OPENAI_API_KEY` for AI-powered natural language responses.*"
+    text = (
+        f"I have data on **{len(df)} employees** ({len(active)} active, {len(departed)} departed).\n"
+        f"I can analyze **turnover, tenure, headcount, departments, grades, career mobility, flight risk, and manager effectiveness**."
     )
+    return text, None, ["Summarize workforce health", "What's our turnover rate?", "Show flight risks"]
 
 
-def _chart_json(chart_type: str, labels: list, values: list, title: str) -> str:
-    import json
-    return json.dumps({"chart_type": chart_type, "labels": labels, "values": values, "title": title})
-
-
-SYSTEM_PROMPT_TEMPLATE = """You are an HR Workforce Analytics assistant. You have access to summary statistics from an employee dataset covering hire/departure dates, job history, organizational structure, and career progression.
-
-Use the following workforce data context to answer the user's question. Be specific with numbers when available. If the data doesn't contain enough information to answer precisely, say so and provide what you can.
-
-Available metrics include:
-- Headcount (total, active, departed) and turnover rates
-- Tenure statistics (average, median, by department)
-- Organizational breakdown: departments, business units, grades, functions, countries
-- Career mobility: role changes, manager changes, time in current role
-- Turnover analysis by department
-
-When the user asks for chart-worthy data, include a "data" field in your mental model with labels and values suitable for visualization.
-
-{context}
-"""
-
+# ─── Main Endpoint ──────────────────────────────────────────────────
 
 @router.post("/query", response_model=ChatResponse)
 async def chat_query(query: ChatQuery):
-    """Answer a natural language question about the workforce data."""
+    """Answer a workforce analytics question with deep analysis."""
     if not is_loaded():
         raise HTTPException(status_code=503, detail="Data not loaded. Upload data first.")
 
     if not query.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    context = _build_workforce_context()
+    context = _build_deep_context(query.current_page, query.filters)
+
+    # Build page hint
     page_hint = ""
     if query.current_page:
         page_map = {
@@ -279,38 +389,66 @@ async def chat_query(query: ChatQuery):
         page_hint = f"\nThe user is currently viewing the {page_label} page. Tailor your answer to that context."
     if query.filters:
         page_hint += f"\nActive filters: {query.filters}"
-    system = SYSTEM_PROMPT_TEMPLATE.format(context=context) + page_hint
 
-    # Append instruction to include chart data when relevant
+    system = SYSTEM_PROMPT.format(context=context) + page_hint
+
+    # Build messages for multi-turn conversation
+    messages = [{"role": "system", "content": system}]
+
+    # Add conversation history (last 6 turns max to fit context)
+    if query.conversation_history:
+        for msg in query.conversation_history[-6:]:
+            if msg.get("role") in ("user", "assistant") and msg.get("content"):
+                messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Add current question with chart instruction
     user_msg = query.question.strip()
     user_msg += (
-        "\n\nIf this question would benefit from a chart or visualization, "
-        "include a JSON block at the end of your response in this exact format:\n"
-        '```json\n{"chart_type": "bar|pie|line", "labels": [...], "values": [...], "title": "..."}\n```'
+        "\n\nIf this question would benefit from a chart, include EXACTLY ONE JSON block in this format:\n"
+        '```json\n{"chart_type": "bar|pie|line|area", "labels": [...], "values": [...], "title": "...", "highlight": "optional_label"}\n```\n'
+        "At the end, add: SUGGESTIONS: follow-up question 1 | follow-up question 2 | follow-up question 3"
     )
+    messages.append({"role": "user", "content": user_msg})
 
     try:
-        answer = await _llm_call(system, user_msg)
+        from ..llm import _get_client_and_model
+        client, model = _get_client_and_model()
+        if client is None:
+            raise ValueError("No LLM key")
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1500,
+        )
+        raw_answer = response.choices[0].message.content
+        answer, chart_data, suggestions = _parse_response(raw_answer)
     except ValueError:
-        # No API key — return a helpful local response
-        answer = _local_chat_response(query.question)
+        answer, chart_data, suggestions = _local_chat_response(query.question)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
 
-    # Try to extract chart data from the response
-    chart_data = None
-    if "```json" in answer:
-        try:
-            import json
-            json_start = answer.index("```json") + 7
-            json_end = answer.index("```", json_start)
-            json_str = answer[json_start:json_end].strip()
-            chart_data = json.loads(json_str)
-            # Remove the JSON block from the text answer
-            answer_text = answer[:answer.index("```json")].strip()
-        except (ValueError, json.JSONDecodeError):
-            answer_text = answer
-    else:
-        answer_text = answer
+    return ChatResponse(
+        answer=answer,
+        data=chart_data,
+        suggestions=suggestions,
+        analysis_type=_detect_analysis_type(query.question),
+    )
 
-    return ChatResponse(answer=answer_text, data=chart_data)
+
+def _detect_analysis_type(question: str) -> str:
+    """Classify the type of analysis being requested."""
+    q = question.lower()
+    if any(w in q for w in ["compare", "vs", "versus", "difference"]):
+        return "comparative"
+    if any(w in q for w in ["trend", "over time", "quarterly", "monthly"]):
+        return "trend"
+    if any(w in q for w in ["why", "root cause", "reason", "explain"]):
+        return "root_cause"
+    if any(w in q for w in ["predict", "forecast", "next quarter"]):
+        return "predictive"
+    if any(w in q for w in ["risk", "flight", "danger"]):
+        return "risk"
+    if any(w in q for w in ["recommend", "action", "should", "improve"]):
+        return "recommendation"
+    return "descriptive"

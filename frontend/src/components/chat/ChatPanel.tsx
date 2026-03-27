@@ -20,6 +20,8 @@ export interface ChatMessage {
     title?: string;
     highlight?: string;
   } | null;
+  suggestions?: string[] | null;
+  analysis_type?: string | null;
   timestamp: number;
 }
 
@@ -106,15 +108,24 @@ export function ChatPanel({
     setInput('');
     setIsLoading(true);
 
+    // Build conversation history for multi-turn context
+    const history = [...messages, userMsg]
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-6)
+      .map(m => ({ role: m.role, content: m.content }));
+
     try {
       const res = await api.post('/api/chat/query', {
         question: trimmed,
         current_page: currentPage,
+        conversation_history: history,
       });
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: res.data.answer || res.data.text || 'No response.',
         chart_data: res.data.data || null,
+        suggestions: res.data.suggestions || null,
+        analysis_type: res.data.analysis_type || null,
         timestamp: Date.now(),
       };
       onSendMessage(assistantMsg);
@@ -329,6 +340,36 @@ export function ChatPanel({
                   )}
                   {msg.chart_data && <MiniChart data={msg.chart_data} />}
                 </div>
+              </div>
+            )}
+            {/* Follow-up suggestions from AI */}
+            {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, paddingLeft: 32 }}>
+                {msg.suggestions.map((s, si) => (
+                  <button
+                    key={si}
+                    onClick={() => sendMessage(s)}
+                    disabled={isLoading}
+                    style={{
+                      padding: '5px 12px', borderRadius: 9999,
+                      background: 'rgba(255,138,76,0.06)',
+                      border: '1px solid rgba(255,138,76,0.15)',
+                      color: '#FF8A4C', fontSize: 11, fontWeight: 500,
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                      transition: 'background 150ms, border-color 150ms',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'rgba(255,138,76,0.12)';
+                      e.currentTarget.style.borderColor = 'rgba(255,138,76,0.3)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'rgba(255,138,76,0.06)';
+                      e.currentTarget.style.borderColor = 'rgba(255,138,76,0.15)';
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
           </div>
