@@ -1,442 +1,410 @@
 """
-LLM-based Taxonomy Generator
-Classifies job titles, grades, and career moves using OpenAI.
+Workforce Taxonomy Engine
+=========================
+Precise, data-driven classification of grades, job families, career levels,
+and title transitions. Uses deterministic rules first (based on actual
+Workhuman grade/title naming conventions), LLM only for ambiguous edge cases.
+
+Designed for continuous operation — new data uploads trigger re-classification.
+Results cached in memory and persisted to JSON for fast restart.
 """
 
+import os
+import re
 import json
 import logging
-import os
-from typing import Any
-
-from openai import OpenAI
+from collections import Counter
 
 logger = logging.getLogger(__name__)
 
-_taxonomy_cache: dict[str, dict] = {
-    "job_families": {},    # job_title -> family name
-    "grade_levels": {},    # grade_title -> standard level
-    "move_types": {},      # (from_title, to_title) -> move type
+TAXONOMY_CACHE_PATH = os.environ.get("TAXONOMY_CACHE", "taxonomy_cache.json")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1. GRADE TAXONOMY — Based on actual Workhuman leveling framework
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# The company uses 4 grade series + special categories:
+#   P-series (Professional/IC): P1 (entry) → P6 (principal/fellow)
+#   M-series (Management): M1 (team lead) → M6 (SVP)
+#   S-series (Support/Specialist): S1 (entry) → S5 (senior specialist)
+#   E-series (Executive): E1, E2
+#   EXEC, C-Suite, CEO: top leadership
+
+GRADE_HIERARCHY = {
+    # Support/Specialist track
+    "S1":  {"level": 1,  "track": "support",    "standard_level": "Support I",         "band": "Individual Contributor", "seniority_rank": 1},
+    "S2":  {"level": 2,  "track": "support",    "standard_level": "Support II",        "band": "Individual Contributor", "seniority_rank": 2},
+    "S3":  {"level": 3,  "track": "support",    "standard_level": "Support III",       "band": "Individual Contributor", "seniority_rank": 3},
+    "S4":  {"level": 4,  "track": "support",    "standard_level": "Senior Specialist", "band": "Senior IC",              "seniority_rank": 4},
+    "S5":  {"level": 5,  "track": "support",    "standard_level": "Lead Specialist",   "band": "Senior IC",              "seniority_rank": 5},
+    # Professional/IC track
+    "P1":  {"level": 1,  "track": "professional", "standard_level": "Associate",         "band": "Individual Contributor", "seniority_rank": 3},
+    "P2":  {"level": 2,  "track": "professional", "standard_level": "Professional",      "band": "Individual Contributor", "seniority_rank": 4},
+    "P3":  {"level": 3,  "track": "professional", "standard_level": "Senior",            "band": "Senior IC",              "seniority_rank": 5},
+    "P4":  {"level": 4,  "track": "professional", "standard_level": "Staff / Lead",      "band": "Senior IC",              "seniority_rank": 6},
+    "P5":  {"level": 5,  "track": "professional", "standard_level": "Principal",         "band": "Principal",              "seniority_rank": 7},
+    "P6":  {"level": 6,  "track": "professional", "standard_level": "Distinguished",     "band": "Principal",              "seniority_rank": 8},
+    # Management track
+    "M1":  {"level": 1,  "track": "management", "standard_level": "Team Lead",          "band": "Management",             "seniority_rank": 5},
+    "M2":  {"level": 2,  "track": "management", "standard_level": "Manager",            "band": "Management",             "seniority_rank": 6},
+    "M3":  {"level": 3,  "track": "management", "standard_level": "Senior Manager",     "band": "Management",             "seniority_rank": 7},
+    "M4":  {"level": 4,  "track": "management", "standard_level": "Director",           "band": "Director",               "seniority_rank": 8},
+    "M5":  {"level": 5,  "track": "management", "standard_level": "Senior Director",    "band": "Director",               "seniority_rank": 9},
+    "M6":  {"level": 6,  "track": "management", "standard_level": "Vice President",     "band": "VP",                     "seniority_rank": 10},
+    # Executive track
+    "E1":  {"level": 1,  "track": "executive",  "standard_level": "SVP",                "band": "Executive",              "seniority_rank": 11},
+    "E2":  {"level": 2,  "track": "executive",  "standard_level": "EVP",                "band": "Executive",              "seniority_rank": 12},
+    "EXEC":{"level": 3,  "track": "executive",  "standard_level": "Executive",          "band": "Executive",              "seniority_rank": 12},
+    "C-Suite":{"level": 4, "track": "executive","standard_level": "C-Suite",            "band": "C-Suite",                "seniority_rank": 13},
+    "CEO": {"level": 5,  "track": "executive",  "standard_level": "CEO",                "band": "C-Suite",                "seniority_rank": 14},
+    # Non-standard
+    "Hourly":     {"level": 0, "track": "hourly",     "standard_level": "Hourly",          "band": "Hourly/Temp",     "seniority_rank": 0},
+    "Salary":     {"level": 0, "track": "salary",     "standard_level": "Salaried",        "band": "Ungraded",        "seniority_rank": 1},
+    "Contingent Workers": {"level": 0, "track": "contingent", "standard_level": "Contractor", "band": "Contingent",    "seniority_rank": 0},
 }
 
-BATCH_SIZE = 50
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. FUNCTION → DEPARTMENT FAMILY MAPPING
+# ═══════════════════════════════════════════════════════════════════════════════
 
-JOB_FAMILY_PROMPT = (
-    "Classify each job title into exactly one of these job families: "
-    "Engineering, Product, Sales, Marketing, Support, Operations, Finance, "
-    "HR, Legal, Data/Analytics, Design, Executive, Other.\n\n"
-    "Return ONLY valid JSON: a single object mapping each job title (exactly "
-    "as provided) to its job family. Example: {\"Software Engineer I\": \"Engineering\"}.\n\n"
-    "Job titles to classify:\n"
-)
-
-GRADE_LEVEL_PROMPT = (
-    "Classify each grade/level title into exactly one of these standard levels: "
-    "IC1, IC2, IC3, IC4, IC5, IC, Manager, Senior Manager, Director, VP, SVP, "
-    "C-Suite, Other.\n\n"
-    "Return ONLY valid JSON: a single object mapping each grade title (exactly "
-    "as provided) to its standard level. Example: {\"P1\": \"IC1\", \"M5\": \"Director\"}.\n\n"
-    "Grade titles to classify:\n"
-)
-
-MOVE_TYPE_PROMPT = (
-    "For each job title transition (from -> to), classify the move as exactly one of: "
-    "promotion, lateral, demotion, or restructure.\n\n"
-    "Return ONLY valid JSON: an array of objects, each with \"from\", \"to\", and \"type\" keys, "
-    "in the same order as the input. Example: "
-    "[{\"from\": \"Software Engineer I\", \"to\": \"Software Engineer II\", \"type\": \"promotion\"}].\n\n"
-    "Transitions to classify:\n"
-)
-
-
-def get_client() -> OpenAI:
-    """Create and return an OpenAI client."""
-    return OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-
-
-def _get_model() -> str:
-    """Return the configured OpenAI model name."""
-    return os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+# Group 151 unique function_titles into ~15 high-level families
+FUNCTION_FAMILY_RULES = [
+    # Engineering & Technology
+    (r"(?i)(engineer|architecture|infrastructure|development|systems|infosec|information security)", "Engineering & Technology"),
+    (r"(?i)(TC-|software|QA|devops|platform)", "Engineering & Technology"),
+    # Product
+    (r"(?i)(product management|product design|product strategy|PD-|product marketing)", "Product"),
+    (r"(?i)(product owner|UX|user experience)", "Product"),
+    # Sales
+    (r"(?i)(sales|business development|enterprise sales|corporate sales|inside sales|outside sales|SL-|strategic accounts|strategic client)", "Sales"),
+    (r"(?i)(VP.*sales|GTM)", "Sales"),
+    # Marketing & Brand
+    (r"(?i)(marketing|brand|creative|demand generation|field marketing|events|public relations|corporate communications|CM-|BM-|content)", "Marketing & Brand"),
+    # Customer Success & Services
+    (r"(?i)(customer success|customer service|client success|client consulting|client engagement|client strategy|CS-|launch|technical services|implementations)", "Customer Success & Services"),
+    (r"(?i)(customer advocacy|customer education|customer experience|customer strategy)", "Customer Success & Services"),
+    # Operations & Supply Chain
+    (r"(?i)(operations|supply chain|fulfillment|procurement|purchasing|supplier|back office|OP-|merchandise|category management)", "Operations & Supply Chain"),
+    (r"(?i)(e-commerce|EC-|retail media|rewards platform)", "Operations & Supply Chain"),
+    # Data & Analytics
+    (r"(?i)(analytics|business analytics|insight|WHiQ|workhuman.*iq|data|research)", "Data & Analytics"),
+    # Finance & Legal
+    (r"(?i)(finance|accounting|accounts payable|accounts receivable|tax|FP&A|FN-|financial|payroll|incentive comp|risk.*internal)", "Finance & Legal"),
+    (r"(?i)(legal|compliance|LG-)", "Finance & Legal"),
+    # Human Resources
+    (r"(?i)(HR|human resource|people.*places|recruiting|learning.*development|workplace|ESG|corporate social)", "Human Resources"),
+    (r"(?i)(human experience|HX|workhuman practice)", "Human Resources"),
+    # Strategy & Consulting
+    (r"(?i)(strategy.*consulting|consulting|strategic advisory|corporate strategy|chief of staff|workhuman practice)", "Strategy & Consulting"),
+    # Executive / Leadership
+    (r"(?i)(executive|leadership|CEO|president)", "Executive Leadership"),
+]
 
 
-def _has_api_key() -> bool:
-    """Check whether an OpenAI API key is configured."""
-    return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+def classify_function_family(function_title: str) -> str:
+    """Classify a function_title into a high-level family using regex rules."""
+    if not function_title or str(function_title) == "nan":
+        return "Unknown"
+    for pattern, family in FUNCTION_FAMILY_RULES:
+        if re.search(pattern, str(function_title)):
+            return family
+    return "Other"
 
 
-def _call_llm(prompt: str) -> str | None:
-    """Send a prompt to the OpenAI chat completions API.
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. JOB TITLE → ROLE LEVEL + JOB FAMILY
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    Returns the assistant message content, or None on failure.
+# Title prefix patterns that indicate seniority
+TITLE_LEVEL_PATTERNS = [
+    (r"(?i)^(chief|CEO|CTO|CFO|COO|CHRO|CIO|CPO|CMO|CLO)", "C-Suite"),
+    (r"(?i)(senior vice president|SVP)", "SVP"),
+    (r"(?i)(vice president|VP)", "VP"),
+    (r"(?i)^senior director", "Senior Director"),
+    (r"(?i)^director", "Director"),
+    (r"(?i)^senior manager", "Senior Manager"),
+    (r"(?i)^manager", "Manager"),
+    (r"(?i)^(head of|lead )", "Lead"),
+    (r"(?i)^principal", "Principal"),
+    (r"(?i)^staff", "Staff"),
+    (r"(?i)^(senior|sr\.?)\b", "Senior"),
+    (r"(?i)(III|3)$", "Mid-Level III"),
+    (r"(?i)(II|2)$", "Mid-Level II"),
+    (r"(?i)(I|1)$", "Entry-Level I"),
+    (r"(?i)^(junior|jr\.?)\b", "Junior"),
+    (r"(?i)(intern|internship|co-op)$", "Intern"),
+    (r"(?i)(associate)$", "Associate"),
+    (r"(?i)(contractor|EPAM|agency|temp)", "Contractor"),
+]
+
+# Job family detection from title keywords
+JOB_FAMILY_PATTERNS = [
+    (r"(?i)(software engineer|developer|SRE|devops|architect|full.?stack)", "Software Engineering"),
+    (r"(?i)(QA|quality|tester|test engineer|automation engineer)", "Quality Assurance"),
+    (r"(?i)(data engineer|data scientist|data analyst|ML engineer|machine learning)", "Data Engineering & Science"),
+    (r"(?i)(product manager|product owner)", "Product Management"),
+    (r"(?i)(product design|UX|UI|interaction design)", "Product Design"),
+    (r"(?i)(engineer|engineering)", "Engineering"),
+    (r"(?i)(sales exec|business development|account exec|BDR|SDR|sales rep)", "Sales"),
+    (r"(?i)(customer service|customer support|service exec)", "Customer Service"),
+    (r"(?i)(customer success|client success|customer strategy)", "Customer Success"),
+    (r"(?i)(consultant|consulting|advisory|strategy)", "Consulting & Strategy"),
+    (r"(?i)(marketing|brand|demand gen|content|creative|copywriter|PR|communications)", "Marketing"),
+    (r"(?i)(recruiter|recruiting|talent acquisition)", "Recruiting"),
+    (r"(?i)(HR|human resources|people partner|people ops|HX|human experience)", "Human Resources"),
+    (r"(?i)(finance|accounting|accountant|payable|receivable|tax|FP&A|controller)", "Finance"),
+    (r"(?i)(legal|counsel|compliance|paralegal)", "Legal"),
+    (r"(?i)(operations|supply chain|procurement|buyer|fulfillment|logistics)", "Operations"),
+    (r"(?i)(infrastructure|sysadmin|network|cloud|security|infosec)", "Infrastructure & Security"),
+    (r"(?i)(project manager|program manager|scrum|agile|delivery)", "Program Management"),
+    (r"(?i)(executive assistant|admin|office manager|workplace)", "Administrative"),
+    (r"(?i)(implementation|launch|onboarding)", "Implementation"),
+    (r"(?i)(technical services|tech support|solutions)", "Technical Services"),
+]
+
+
+def classify_title_level(job_title: str) -> str:
+    """Extract seniority level from job title."""
+    if not job_title or str(job_title) == "nan":
+        return "Unknown"
+    for pattern, level in TITLE_LEVEL_PATTERNS:
+        if re.search(pattern, str(job_title)):
+            return level
+    return "Mid-Level"
+
+
+def classify_job_family(job_title: str) -> str:
+    """Classify job title into a job family."""
+    if not job_title or str(job_title) == "nan":
+        return "Unknown"
+    for pattern, family in JOB_FAMILY_PATTERNS:
+        if re.search(pattern, str(job_title)):
+            return family
+    return "General"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. CAREER MOVE CLASSIFICATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def classify_career_move(from_title: str, to_title: str, from_grade: str = None, to_grade: str = None) -> dict:
     """
-    try:
-        client = get_client()
-        response = client.chat.completions.create(
-            model=_get_model(),
-            temperature=0.1,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a precise classification assistant for HR data. "
-                        "Always respond with valid JSON only, no markdown fences or extra text."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-        )
-        return response.choices[0].message.content
-    except Exception:
-        logger.exception("OpenAI API call failed")
-        return None
-
-
-def _parse_json(raw: str | None) -> Any:
-    """Attempt to parse a JSON string, stripping markdown fences if present."""
-    if raw is None:
-        return None
-    text = raw.strip()
-    # Strip markdown code fences that models sometimes add
-    if text.startswith("```"):
-        lines = text.splitlines()
-        # Remove first and last fence lines
-        lines = [ln for ln in lines if not ln.strip().startswith("```")]
-        text = "\n".join(lines)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse LLM JSON response: %.200s", text)
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Public classifiers
-# ---------------------------------------------------------------------------
-
-def classify_job_families(job_titles: list[str]) -> dict[str, str]:
-    """Classify unique job titles into job families. Processes in batches of 50.
-
-    Returns a dict mapping every provided job title to its family name.
-    Already-cached titles are not re-sent to the API.
+    Classify a career transition as promotion/lateral/demotion/restructure.
+    Uses multiple signals: grade change, title level change, title similarity.
     """
-    cache = _taxonomy_cache["job_families"]
-    result: dict[str, str] = {}
-
-    # Separate cached from uncached
-    uncached: list[str] = []
-    for title in job_titles:
-        if title in cache:
-            result[title] = cache[title]
-        else:
-            uncached.append(title)
-
-    if not uncached:
-        logger.info("All %d job titles already cached", len(job_titles))
-        return result
-
-    if not _has_api_key():
-        logger.warning(
-            "OPENAI_API_KEY not set — returning 'Unclassified' for %d job titles",
-            len(uncached),
-        )
-        for title in uncached:
-            result[title] = "Unclassified"
-            cache[title] = "Unclassified"
-        return result
-
-    classified_count = 0
-    failed_count = 0
-
-    for i in range(0, len(uncached), BATCH_SIZE):
-        batch = uncached[i : i + BATCH_SIZE]
-        numbered = "\n".join(f"- {t}" for t in batch)
-        prompt = JOB_FAMILY_PROMPT + numbered
-
-        raw = _call_llm(prompt)
-        parsed = _parse_json(raw)
-
-        if isinstance(parsed, dict):
-            for title in batch:
-                family = parsed.get(title, "Unclassified")
-                if not isinstance(family, str):
-                    family = "Unclassified"
-                result[title] = family
-                cache[title] = family
-                if family != "Unclassified":
-                    classified_count += 1
-                else:
-                    failed_count += 1
-        else:
-            logger.warning(
-                "Batch %d–%d: invalid response, marking as Unclassified",
-                i,
-                i + len(batch),
-            )
-            for title in batch:
-                result[title] = "Unclassified"
-                cache[title] = "Unclassified"
-                failed_count += 1
-
-    logger.info(
-        "Job family classification: %d classified, %d failed out of %d new titles",
-        classified_count,
-        failed_count,
-        len(uncached),
-    )
-    return result
-
-
-def classify_grade_levels(grade_titles: list[str]) -> dict[str, str]:
-    """Classify grade titles into standard levels. Processes in batches of 50.
-
-    Returns a dict mapping every provided grade title to its standard level.
-    """
-    cache = _taxonomy_cache["grade_levels"]
-    result: dict[str, str] = {}
-
-    uncached: list[str] = []
-    for title in grade_titles:
-        if title in cache:
-            result[title] = cache[title]
-        else:
-            uncached.append(title)
-
-    if not uncached:
-        logger.info("All %d grade titles already cached", len(grade_titles))
-        return result
-
-    if not _has_api_key():
-        logger.warning(
-            "OPENAI_API_KEY not set — returning 'Unclassified' for %d grade titles",
-            len(uncached),
-        )
-        for title in uncached:
-            result[title] = "Unclassified"
-            cache[title] = "Unclassified"
-        return result
-
-    classified_count = 0
-    failed_count = 0
-
-    for i in range(0, len(uncached), BATCH_SIZE):
-        batch = uncached[i : i + BATCH_SIZE]
-        numbered = "\n".join(f"- {g}" for g in batch)
-        prompt = GRADE_LEVEL_PROMPT + numbered
-
-        raw = _call_llm(prompt)
-        parsed = _parse_json(raw)
-
-        if isinstance(parsed, dict):
-            for title in batch:
-                level = parsed.get(title, "Unclassified")
-                if not isinstance(level, str):
-                    level = "Unclassified"
-                result[title] = level
-                cache[title] = level
-                if level != "Unclassified":
-                    classified_count += 1
-                else:
-                    failed_count += 1
-        else:
-            logger.warning(
-                "Batch %d–%d: invalid response, marking as Unclassified",
-                i,
-                i + len(batch),
-            )
-            for title in batch:
-                result[title] = "Unclassified"
-                cache[title] = "Unclassified"
-                failed_count += 1
-
-    logger.info(
-        "Grade level classification: %d classified, %d failed out of %d new grades",
-        classified_count,
-        failed_count,
-        len(uncached),
-    )
-    return result
-
-
-def classify_move_types(
-    transitions: list[tuple[str, str]],
-) -> dict[tuple[str, str], str]:
-    """Classify title transitions as promotion/lateral/demotion/restructure.
-
-    Returns a dict mapping each (from_title, to_title) tuple to a move type.
-    """
-    cache = _taxonomy_cache["move_types"]
-    result: dict[tuple[str, str], str] = {}
-
-    uncached: list[tuple[str, str]] = []
-    for pair in transitions:
-        key = tuple(pair)
-        if key in cache:
-            result[key] = cache[key]
-        else:
-            uncached.append(key)
-
-    if not uncached:
-        logger.info("All %d transitions already cached", len(transitions))
-        return result
-
-    if not _has_api_key():
-        logger.warning(
-            "OPENAI_API_KEY not set — returning 'Unclassified' for %d transitions",
-            len(uncached),
-        )
-        for pair in uncached:
-            result[pair] = "Unclassified"
-            cache[pair] = "Unclassified"
-        return result
-
-    classified_count = 0
-    failed_count = 0
-
-    for i in range(0, len(uncached), BATCH_SIZE):
-        batch = uncached[i : i + BATCH_SIZE]
-        lines = "\n".join(f"- \"{frm}\" -> \"{to}\"" for frm, to in batch)
-        prompt = MOVE_TYPE_PROMPT + lines
-
-        raw = _call_llm(prompt)
-        parsed = _parse_json(raw)
-
-        if isinstance(parsed, list) and len(parsed) == len(batch):
-            for idx, (frm, to) in enumerate(batch):
-                entry = parsed[idx]
-                move_type = "Unclassified"
-                if isinstance(entry, dict):
-                    mt = entry.get("type", "Unclassified")
-                    if isinstance(mt, str) and mt in {
-                        "promotion",
-                        "lateral",
-                        "demotion",
-                        "restructure",
-                    }:
-                        move_type = mt
-                result[(frm, to)] = move_type
-                cache[(frm, to)] = move_type
-                if move_type != "Unclassified":
-                    classified_count += 1
-                else:
-                    failed_count += 1
-        else:
-            # Try to salvage if parsed is a list but length mismatch or dict
-            salvaged = False
-            if isinstance(parsed, list):
-                lookup: dict[tuple[str, str], str] = {}
-                for entry in parsed:
-                    if isinstance(entry, dict):
-                        f = entry.get("from", "")
-                        t = entry.get("to", "")
-                        mt = entry.get("type", "Unclassified")
-                        if isinstance(mt, str) and mt in {
-                            "promotion",
-                            "lateral",
-                            "demotion",
-                            "restructure",
-                        }:
-                            lookup[(f, t)] = mt
-                if lookup:
-                    salvaged = True
-                    for frm, to in batch:
-                        move_type = lookup.get((frm, to), "Unclassified")
-                        result[(frm, to)] = move_type
-                        cache[(frm, to)] = move_type
-                        if move_type != "Unclassified":
-                            classified_count += 1
-                        else:
-                            failed_count += 1
-
-            if not salvaged:
-                logger.warning(
-                    "Batch %d–%d: invalid response, marking as Unclassified",
-                    i,
-                    i + len(batch),
-                )
-                for frm, to in batch:
-                    result[(frm, to)] = "Unclassified"
-                    cache[(frm, to)] = "Unclassified"
-                    failed_count += 1
-
-    logger.info(
-        "Move type classification: %d classified, %d failed out of %d new transitions",
-        classified_count,
-        failed_count,
-        len(uncached),
-    )
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Orchestrator
-# ---------------------------------------------------------------------------
-
-def run_full_taxonomy(employees_df, history_df) -> dict:
-    """Run all classifications on the dataset.
-
-    Called from data_loader after loading/processing employee and history data.
-
-    Parameters
-    ----------
-    employees_df : pandas.DataFrame
-        Must contain at least a ``job_title`` column and optionally a ``grade`` column.
-    history_df : pandas.DataFrame
-        Must contain ``from_title`` and ``to_title`` columns for transition records.
-
-    Returns
-    -------
-    dict
-        Combined taxonomy results with keys ``job_families``, ``grade_levels``,
-        and ``move_types``.
-    """
-    results: dict[str, dict] = {
-        "job_families": {},
-        "grade_levels": {},
-        "move_types": {},
+    result = {
+        "from_title": from_title,
+        "to_title": to_title,
+        "move_type": "lateral",
+        "confidence": "medium",
+        "signals": [],
     }
 
-    # --- Job families ---
-    if "job_title" in employees_df.columns:
-        unique_titles = (
-            employees_df["job_title"].dropna().unique().tolist()
-        )
-        logger.info("Classifying %d unique job titles", len(unique_titles))
-        results["job_families"] = classify_job_families(unique_titles)
-    else:
-        logger.warning("No 'job_title' column found — skipping job family classification")
+    if not from_title or not to_title or str(from_title) == "nan" or str(to_title) == "nan":
+        result["move_type"] = "unknown"
+        return result
 
-    # --- Grade levels ---
-    if "grade" in employees_df.columns:
-        unique_grades = (
-            employees_df["grade"].dropna().unique().tolist()
-        )
-        logger.info("Classifying %d unique grade titles", len(unique_grades))
-        results["grade_levels"] = classify_grade_levels(unique_grades)
-    else:
-        logger.warning("No 'grade' column found — skipping grade level classification")
+    # Signal 1: Grade-based (strongest signal)
+    if from_grade and to_grade and from_grade in GRADE_HIERARCHY and to_grade in GRADE_HIERARCHY:
+        from_rank = GRADE_HIERARCHY[from_grade]["seniority_rank"]
+        to_rank = GRADE_HIERARCHY[to_grade]["seniority_rank"]
+        if to_rank > from_rank:
+            result["signals"].append(f"grade_up:{from_grade}→{to_grade}")
+            result["move_type"] = "promotion"
+            result["confidence"] = "high"
+        elif to_rank < from_rank:
+            result["signals"].append(f"grade_down:{from_grade}→{to_grade}")
+            result["move_type"] = "demotion"
+            result["confidence"] = "high"
+        else:
+            result["signals"].append("grade_same")
 
-    # --- Move types ---
-    if {"from_title", "to_title"}.issubset(history_df.columns):
-        transitions_df = history_df[["from_title", "to_title"]].dropna().drop_duplicates()
-        unique_transitions = list(
-            transitions_df.itertuples(index=False, name=None)
-        )
-        logger.info("Classifying %d unique title transitions", len(unique_transitions))
-        results["move_types"] = classify_move_types(unique_transitions)
-    else:
-        logger.warning(
-            "History DataFrame missing 'from_title'/'to_title' — skipping move type classification"
-        )
+    # Signal 2: Title level change
+    from_level = classify_title_level(from_title)
+    to_level = classify_title_level(to_title)
+    level_rank = {
+        "Intern": 0, "Junior": 1, "Entry-Level I": 2, "Associate": 2,
+        "Mid-Level": 3, "Mid-Level II": 4, "Mid-Level III": 5,
+        "Senior": 6, "Staff": 7, "Lead": 7, "Principal": 8,
+        "Manager": 7, "Senior Manager": 8, "Director": 9,
+        "Senior Director": 10, "VP": 11, "SVP": 12, "C-Suite": 13,
+        "Contractor": 1, "Unknown": 3,
+    }
+    from_r = level_rank.get(from_level, 3)
+    to_r = level_rank.get(to_level, 3)
+    if to_r > from_r:
+        result["signals"].append(f"title_level_up:{from_level}→{to_level}")
+        if result["confidence"] != "high":
+            result["move_type"] = "promotion"
+            result["confidence"] = "medium"
+    elif to_r < from_r:
+        result["signals"].append(f"title_level_down:{from_level}→{to_level}")
+        if result["confidence"] != "high":
+            result["move_type"] = "demotion"
+            result["confidence"] = "medium"
 
-    return results
+    # Signal 3: Job family change (lateral if family changes but level same)
+    from_family = classify_job_family(from_title)
+    to_family = classify_job_family(to_title)
+    if from_family != to_family and from_family != "General" and to_family != "General":
+        result["signals"].append(f"family_change:{from_family}→{to_family}")
+        if result["move_type"] == "lateral":
+            result["move_type"] = "lateral_transfer"
+
+    # Signal 4: Restructure detection (title is very different but same level)
+    from_words = set(str(from_title).lower().split())
+    to_words = set(str(to_title).lower().split())
+    overlap = len(from_words & to_words) / max(len(from_words | to_words), 1)
+    if overlap < 0.2 and result["move_type"] == "lateral":
+        result["signals"].append(f"low_title_overlap:{overlap:.2f}")
+        result["move_type"] = "restructure"
+
+    return result
 
 
-def get_cached_taxonomy() -> dict:
-    """Return current taxonomy cache."""
-    return _taxonomy_cache
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. FULL TAXONOMY RUNNER — Processes entire dataset
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_taxonomy_results: dict = {}
 
 
-def clear_cache():
+def run_taxonomy(employees_df, history_df) -> dict:
+    """
+    Run full taxonomy on the dataset. Called after data_loader processes CSVs.
+    Returns enriched classification results.
+    """
+    global _taxonomy_results
+    import pandas as pd
+
+    logger.info("Running taxonomy classification...")
+
+    # 1. Grade classification (deterministic — no LLM needed)
+    grade_map = {}
+    for grade in employees_df["grade_title"].dropna().unique():
+        grade_str = str(grade)
+        if grade_str in GRADE_HIERARCHY:
+            grade_map[grade_str] = GRADE_HIERARCHY[grade_str]
+        else:
+            grade_map[grade_str] = {
+                "level": 0, "track": "unknown",
+                "standard_level": grade_str, "band": "Unknown", "seniority_rank": 0,
+            }
+    logger.info(f"Classified {len(grade_map)} unique grades ({sum(1 for v in grade_map.values() if v['track'] != 'unknown')} known)")
+
+    # 2. Function family classification (regex rules)
+    function_map = {}
+    for func in employees_df["function_title"].dropna().unique():
+        function_map[str(func)] = classify_function_family(str(func))
+    families = Counter(function_map.values())
+    logger.info(f"Classified {len(function_map)} functions into {len(families)} families: {dict(families.most_common(10))}")
+
+    # 3. Job title classification (seniority + family)
+    title_map = {}
+    all_titles = set()
+    for col in ["job_title"]:
+        if col in employees_df.columns:
+            all_titles.update(employees_df[col].dropna().unique())
+        if col in history_df.columns:
+            all_titles.update(history_df[col].dropna().unique())
+
+    for title in all_titles:
+        title_str = str(title)
+        title_map[title_str] = {
+            "seniority_level": classify_title_level(title_str),
+            "job_family": classify_job_family(title_str),
+        }
+    family_counts = Counter(t["job_family"] for t in title_map.values())
+    level_counts = Counter(t["seniority_level"] for t in title_map.values())
+    logger.info(f"Classified {len(title_map)} unique titles into {len(family_counts)} families, {len(level_counts)} levels")
+
+    # 4. Career move classification
+    move_results = []
+    hist_sorted = history_df.sort_values(["pk_user", "effective_start_date"])
+    prev_titles = hist_sorted.groupby("pk_user")["job_title"].shift(1)
+    transitions = hist_sorted[hist_sorted["job_title"] != prev_titles].copy()
+    transitions["prev_title"] = prev_titles[transitions.index]
+    transitions = transitions.dropna(subset=["prev_title"])
+
+    move_counts = Counter()
+    for _, row in transitions.iterrows():
+        move = classify_career_move(str(row["prev_title"]), str(row["job_title"]))
+        move_counts[move["move_type"]] += 1
+        move_results.append({
+            "pk_user": row["pk_user"],
+            "from_title": str(row["prev_title"]),
+            "to_title": str(row["job_title"]),
+            "date": str(row["effective_start_date"]),
+            "move_type": move["move_type"],
+            "confidence": move["confidence"],
+            "signals": move["signals"],
+        })
+
+    logger.info(f"Classified {len(move_results)} career moves: {dict(move_counts)}")
+
+    _taxonomy_results = {
+        "grade_map": grade_map,
+        "function_family_map": function_map,
+        "title_map": title_map,
+        "career_moves": move_results,
+        "summary": {
+            "unique_grades": len(grade_map),
+            "known_grades": sum(1 for v in grade_map.values() if v["track"] != "unknown"),
+            "unique_functions": len(function_map),
+            "function_families": dict(families),
+            "unique_titles": len(title_map),
+            "job_families": dict(family_counts),
+            "seniority_levels": dict(level_counts),
+            "total_career_moves": len(move_results),
+            "move_types": dict(move_counts),
+        },
+    }
+
+    # Persist to disk for fast restart
+    _save_cache()
+    return _taxonomy_results
+
+
+def get_taxonomy() -> dict:
+    """Return cached taxonomy results."""
+    if not _taxonomy_results:
+        _load_cache()
+    return _taxonomy_results
+
+
+def _save_cache():
+    """Save taxonomy to JSON file."""
+    try:
+        # Move results are too large for JSON — save summary + maps only
+        cache = {
+            "grade_map": _taxonomy_results.get("grade_map", {}),
+            "function_family_map": _taxonomy_results.get("function_family_map", {}),
+            "title_map": _taxonomy_results.get("title_map", {}),
+            "summary": _taxonomy_results.get("summary", {}),
+        }
+        with open(TAXONOMY_CACHE_PATH, "w") as f:
+            json.dump(cache, f, indent=2, default=str)
+        logger.info(f"Taxonomy cached to {TAXONOMY_CACHE_PATH}")
+    except Exception as e:
+        logger.warning(f"Failed to save taxonomy cache: {e}")
+
+
+def _load_cache():
+    """Load taxonomy from JSON cache if available."""
+    global _taxonomy_results
+    if os.path.exists(TAXONOMY_CACHE_PATH):
+        try:
+            with open(TAXONOMY_CACHE_PATH) as f:
+                _taxonomy_results = json.load(f)
+            logger.info(f"Loaded taxonomy cache from {TAXONOMY_CACHE_PATH}")
+        except Exception as e:
+            logger.warning(f"Failed to load taxonomy cache: {e}")
+
+
+def clear_taxonomy():
     """Clear taxonomy cache to force re-classification."""
-    for key in _taxonomy_cache:
-        _taxonomy_cache[key] = {}
+    global _taxonomy_results
+    _taxonomy_results = {}
+    if os.path.exists(TAXONOMY_CACHE_PATH):
+        os.remove(TAXONOMY_CACHE_PATH)
     logger.info("Taxonomy cache cleared")

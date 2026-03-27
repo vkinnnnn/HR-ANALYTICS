@@ -103,6 +103,38 @@ def load_and_process(data_dir: str | None = None) -> dict[str, pd.DataFrame]:
     span = current_mgr.groupby("fk_direct_manager").size().reset_index(name="direct_reports")
     span.columns = ["manager_id", "direct_reports"]
 
+    # ── Run taxonomy classification ──
+    from .taxonomy import run_taxonomy, classify_function_family, classify_title_level, classify_job_family, GRADE_HIERARCHY
+    try:
+        taxonomy = run_taxonomy(emp_df, hist_df)
+
+        # Enrich employee DataFrame with taxonomy columns
+        emp_df["grade_band"] = emp_df["grade_title"].map(
+            lambda g: GRADE_HIERARCHY.get(str(g), {}).get("band", "Unknown") if pd.notna(g) else "Unknown"
+        )
+        emp_df["grade_standard_level"] = emp_df["grade_title"].map(
+            lambda g: GRADE_HIERARCHY.get(str(g), {}).get("standard_level", str(g)) if pd.notna(g) else "Unknown"
+        )
+        emp_df["grade_track"] = emp_df["grade_title"].map(
+            lambda g: GRADE_HIERARCHY.get(str(g), {}).get("track", "unknown") if pd.notna(g) else "unknown"
+        )
+        emp_df["seniority_rank"] = emp_df["grade_title"].map(
+            lambda g: GRADE_HIERARCHY.get(str(g), {}).get("seniority_rank", 0) if pd.notna(g) else 0
+        )
+        emp_df["function_family"] = emp_df["function_title"].map(
+            lambda f: classify_function_family(str(f)) if pd.notna(f) else "Unknown"
+        )
+        emp_df["title_seniority"] = emp_df["job_title"].map(
+            lambda t: classify_title_level(str(t)) if pd.notna(t) else "Unknown"
+        )
+        emp_df["job_family"] = emp_df["job_title"].map(
+            lambda t: classify_job_family(str(t)) if pd.notna(t) else "Unknown"
+        )
+        _data_cache["taxonomy"] = taxonomy
+        print(f"Taxonomy: {taxonomy.get('summary', {}).get('total_career_moves', 0)} career moves classified")
+    except Exception as e:
+        print(f"Warning: Taxonomy classification failed: {e}")
+
     # ── Cache everything ──
     _data_cache["employees"] = emp_df
     _data_cache["history"] = hist_df

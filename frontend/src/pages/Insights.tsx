@@ -1,200 +1,185 @@
-import { useState } from 'react';
-import { Sparkles, Layers, Award, GitBranch, CheckCircle2, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Layers, GitBranch, RefreshCw, Briefcase } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import api from '../lib/api';
+import { CHART_COLORS } from '../lib/utils';
 import { PageHero } from '../components/ui/PageHero';
 import { Panel } from '../components/ui/Panel';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Badge } from '../components/ui/Badge';
-
-interface TaxonomyPanel {
-  key: string;
-  title: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  color: string;
-  status: 'idle' | 'generating' | 'generated';
-  sampleData: { label: string; value: string }[];
-}
-
-const INITIAL_PANELS: TaxonomyPanel[] = [
-  {
-    key: 'job-family',
-    title: 'Job Family Taxonomy',
-    subtitle: 'Classify roles into standardized job families',
-    icon: <Layers size={16} />,
-    color: '#FF8A4C',
-    status: 'idle',
-    sampleData: [
-      { label: 'Software Engineer II', value: 'Engineering > Software Development' },
-      { label: 'Sr. Data Analyst', value: 'Analytics > Data Science' },
-      { label: 'Marketing Manager', value: 'Marketing > Brand Management' },
-      { label: 'HR Business Partner', value: 'Human Resources > HR Advisory' },
-      { label: 'Product Owner', value: 'Product > Product Management' },
-    ],
-  },
-  {
-    key: 'grade',
-    title: 'Grade Standardization',
-    subtitle: 'Normalize disparate grading scales across business units',
-    icon: <Award size={16} />,
-    color: '#a78bfa',
-    status: 'idle',
-    sampleData: [
-      { label: 'IC1 / Junior', value: 'Grade 5 — Individual Contributor Entry' },
-      { label: 'IC2 / Mid-Level', value: 'Grade 6 — Individual Contributor Core' },
-      { label: 'IC3 / Senior', value: 'Grade 7 — Individual Contributor Senior' },
-      { label: 'M1 / Team Lead', value: 'Grade 8 — Manager Entry' },
-      { label: 'M2 / Director', value: 'Grade 9 — Manager Senior' },
-    ],
-  },
-  {
-    key: 'career-move',
-    title: 'Career Move Classification',
-    subtitle: 'Categorize internal movements as promotions, lateral, or demotions',
-    icon: <GitBranch size={16} />,
-    color: '#34d399',
-    status: 'idle',
-    sampleData: [
-      { label: 'Analyst → Sr. Analyst (same dept)', value: 'Promotion — Vertical' },
-      { label: 'Engineer → Product Manager', value: 'Lateral — Cross-function' },
-      { label: 'Director → Sr. Manager', value: 'Demotion — Downlevel' },
-      { label: 'IC3 → Team Lead', value: 'Promotion — Management Track' },
-      { label: 'Ops Lead → Ops Lead (new BU)', value: 'Lateral — Cross-unit' },
-    ],
-  },
-];
+import { KpiCard } from '../components/ui/KpiCard';
+import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 export function Insights() {
-  const [panels, setPanels] = useState<TaxonomyPanel[]>(INITIAL_PANELS);
+  const [summary, setSummary] = useState<any>(null);
+  const [grades, setGrades] = useState<any>(null);
+  const [functions, setFunctions] = useState<any>(null);
+  const [jobFamilies, setJobFamilies] = useState<any>(null);
+  const [careerMoves, setCareerMoves] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
 
-  const handleGenerate = (key: string) => {
-    setPanels(prev =>
-      prev.map(p => (p.key === key ? { ...p, status: 'generating' as const } : p))
-    );
-
-    // Simulate generation (will connect to /api/taxonomy in the future)
-    setTimeout(() => {
-      setPanels(prev =>
-        prev.map(p => (p.key === key ? { ...p, status: 'generated' as const } : p))
-      );
-    }, 2200);
+  const fetchAll = () => {
+    setLoading(true);
+    Promise.all([
+      api.get('/api/taxonomy/summary'),
+      api.get('/api/taxonomy/grades'),
+      api.get('/api/taxonomy/functions'),
+      api.get('/api/taxonomy/job-families'),
+      api.get('/api/taxonomy/career-moves'),
+    ]).then(([sumRes, gradeRes, funcRes, jfRes, moveRes]) => {
+      setSummary(sumRes.data);
+      setGrades(gradeRes.data);
+      setFunctions(funcRes.data);
+      setJobFamilies(jfRes.data);
+      setCareerMoves(moveRes.data);
+    }).catch(() => {})
+      .finally(() => setLoading(false));
   };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const handleRegenerate = () => {
+    setRegenerating(true);
+    api.post('/api/taxonomy/regenerate')
+      .then(() => fetchAll())
+      .finally(() => setRegenerating(false));
+  };
+
+  const gradeBandData = grades?.band_counts
+    ? Object.entries(grades.band_counts).map(([band, count]) => ({ name: band, count: count as number })).sort((a, b) => b.count - a.count)
+    : [];
+
+  const functionFamilyData = functions?.family_counts
+    ? Object.entries(functions.family_counts).map(([family, count]) => ({ name: family, count: count as number })).sort((a, b) => b.count - a.count)
+    : [];
+
+  const jobFamilyData = jobFamilies?.family_counts
+    ? Object.entries(jobFamilies.family_counts).map(([family, count]) => ({ name: family, count: count as number })).sort((a, b) => b.count - a.count).slice(0, 15)
+    : [];
+
+  const moveTypeData = careerMoves?.move_type_counts
+    ? Object.entries(careerMoves.move_type_counts).map(([type, count]) => ({ name: type, count: count as number }))
+    : [];
+
+  const moveColors: Record<string, string> = { promotion: '#34d399', lateral: '#60a5fa', lateral_transfer: '#a78bfa', demotion: '#fb7185', restructure: '#fbbf24', unknown: '#52525b' };
 
   return (
     <div>
-      <PageHero
-        icon={<Sparkles size={20} />}
-        title="AI Insights & Taxonomy"
-        subtitle="Auto-generated workforce classifications"
-      />
-
-      <div className="space-y-6">
-        {panels.map((panel, i) => (
-          <Panel key={panel.key} delay={i * 80}>
-            <SectionHeader
-              icon={panel.icon}
-              title={panel.title}
-              subtitle={panel.subtitle}
-              action={
-                <div className="flex items-center gap-3">
-                  {panel.status === 'generated' && (
-                    <Badge label="Generated" color={panel.color} dot />
-                  )}
-                  {panel.status === 'idle' && (
-                    <Badge label="Not yet generated" color="#71717a" />
-                  )}
-                  <button
-                    onClick={() => handleGenerate(panel.key)}
-                    disabled={panel.status === 'generating'}
-                    className="flex items-center gap-2 transition-all duration-200"
-                    style={{
-                      padding: '7px 16px',
-                      borderRadius: 10,
-                      background:
-                        panel.status === 'generating'
-                          ? 'rgba(255,255,255,0.04)'
-                          : `${panel.color}18`,
-                      border: `1px solid ${
-                        panel.status === 'generating'
-                          ? 'rgba(255,255,255,0.06)'
-                          : `${panel.color}30`
-                      }`,
-                      color: panel.status === 'generating' ? '#71717a' : panel.color,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: panel.status === 'generating' ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {panel.status === 'generating' ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={13} />
-                        {panel.status === 'generated' ? 'Regenerate' : 'Generate'}
-                      </>
-                    )}
-                  </button>
-                </div>
-              }
-            />
-
-            {/* Sample classifications */}
-            <div
-              style={{
-                borderRadius: 10,
-                overflow: 'hidden',
-                border: '1px solid rgba(255,255,255,0.04)',
-              }}
-            >
-              <div
-                className="grid grid-cols-2"
-                style={{
-                  padding: '8px 14px',
-                  background: 'rgba(255,255,255,0.02)',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
-                }}
-              >
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Input
-                </span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Classification
-                </span>
-              </div>
-              {panel.sampleData.map((row, j) => (
-                <div
-                  key={j}
-                  className="grid grid-cols-2"
-                  style={{
-                    padding: '10px 14px',
-                    borderBottom: j < panel.sampleData.length - 1 ? '1px solid rgba(255,255,255,0.03)' : undefined,
-                    opacity: panel.status === 'generated' ? 1 : 0.45,
-                    transition: 'opacity 0.4s ease',
-                  }}
-                >
-                  <span style={{ fontSize: 12, color: '#d4d4d8' }}>{row.label}</span>
-                  <div className="flex items-center gap-2">
-                    {panel.status === 'generated' && (
-                      <CheckCircle2 size={12} style={{ color: panel.color, flexShrink: 0 }} />
-                    )}
-                    <span style={{ fontSize: 12, color: panel.status === 'generated' ? '#fafafa' : '#71717a' }}>
-                      {row.value}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {panel.status === 'idle' && (
-              <p style={{ fontSize: 11, color: '#52525b', marginTop: 12, fontStyle: 'italic' }}>
-                Sample data shown for demonstration. Click "Generate" to classify your actual workforce data.
-              </p>
-            )}
-          </Panel>
-        ))}
+      <div className="flex items-center justify-between">
+        <PageHero icon={<Sparkles size={20} />} title="AI Insights & Taxonomy" subtitle="Auto-generated workforce classifications — grades, job families, career moves" />
+        <button
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all"
+          style={{ background: 'rgba(255,138,76,0.15)', border: '1px solid rgba(255,138,76,0.25)', color: '#FF8A4C' }}
+        >
+          <RefreshCw size={14} className={regenerating ? 'animate-spin' : ''} />
+          {regenerating ? 'Regenerating...' : 'Regenerate Taxonomy'}
+        </button>
       </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        <KpiCard label="Unique Grades" value={summary?.unique_grades || 0} delay={0} loading={loading} icon={<Layers size={18} />} />
+        <KpiCard label="Function Families" value={Object.keys(functions?.families || {}).length || 0} delay={60} loading={loading} icon={<Briefcase size={18} />} color="#34d399" />
+        <KpiCard label="Job Families" value={Object.keys(jobFamilies?.families || {}).length || 0} delay={120} loading={loading} icon={<Sparkles size={18} />} color="#a78bfa" />
+        <KpiCard label="Career Moves Classified" value={careerMoves?.total_moves || 0} delay={180} loading={loading} icon={<GitBranch size={18} />} color="#fbbf24" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        {/* Grade Band Distribution */}
+        <Panel delay={200}>
+          <SectionHeader icon={<Layers size={16} />} title="Grade Band Distribution" subtitle="Employee count by career band" />
+          {gradeBandData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={gradeBandData} layout="vertical" margin={{ left: 100 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                <XAxis type="number" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} width={100} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {gradeBandData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <p style={{ color: '#52525b' }}>Loading...</p>}
+        </Panel>
+
+        {/* Career Move Types */}
+        <Panel delay={260}>
+          <SectionHeader icon={<GitBranch size={16} />} title="Career Move Types" subtitle="Classification of all title transitions" />
+          {moveTypeData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={moveTypeData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={110} paddingAngle={2}>
+                  {moveTypeData.map((entry) => <Cell key={entry.name} fill={moveColors[entry.name] || '#52525b'} />)}
+                </Pie>
+                <Tooltip content={<ChartTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <p style={{ color: '#52525b' }}>Loading...</p>}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {moveTypeData.map(m => (
+              <Badge key={m.name} label={`${m.name}: ${m.count}`} color={moveColors[m.name] || '#52525b'} />
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Function Families */}
+      <Panel delay={320} className="mb-5">
+        <SectionHeader icon={<Briefcase size={16} />} title="Function Family Classification" subtitle={`${functions?.total_functions || 0} functions → ${functions?.total_families || 0} families`} />
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={functionFamilyData} layout="vertical" margin={{ left: 160 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+            <XAxis type="number" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} width={160} />
+            <Tooltip content={<ChartTooltip />} />
+            <Bar dataKey="count" fill="#FF8A4C" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Panel>
+
+      {/* Job Families */}
+      <Panel delay={380} className="mb-5">
+        <SectionHeader icon={<Sparkles size={16} />} title="Job Family Classification" subtitle={`${jobFamilies?.total_titles || 0} unique titles → ${jobFamilies?.total_families || 0} families`} />
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={jobFamilyData} layout="vertical" margin={{ left: 160 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+            <XAxis type="number" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} width={160} />
+            <Tooltip content={<ChartTooltip />} />
+            <Bar dataKey="count" fill="#a78bfa" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Panel>
+
+      {/* Career Move Examples */}
+      {careerMoves?.examples_by_type && (
+        <Panel delay={440}>
+          <SectionHeader icon={<GitBranch size={16} />} title="Career Move Examples" subtitle="Sample classified transitions by type" />
+          <div className="grid grid-cols-2 gap-4">
+            {Object.entries(careerMoves.examples_by_type).map(([type, examples]: [string, any]) => (
+              <div key={type}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge label={type} color={moveColors[type] || '#52525b'} />
+                  <span style={{ fontSize: 11, color: '#71717a' }}>{(examples as any[]).length} examples</span>
+                </div>
+                <div className="space-y-1.5">
+                  {(examples as any[]).slice(0, 5).map((ex: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 p-2 rounded-[12px] bg-subtle" style={{ fontSize: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <span style={{ color: '#a1a1aa' }}>{ex.from}</span>
+                      <span style={{ color: '#52525b' }}>→</span>
+                      <span style={{ color: '#fafafa', fontWeight: 500 }}>{ex.to}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

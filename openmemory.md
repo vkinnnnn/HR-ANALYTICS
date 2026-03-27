@@ -1,7 +1,7 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Fixed frontend types, cleaned stale files, redeployed, initialized git. Push to GitHub pending auth.
+2026-03-27 — Built taxonomy.py, updated API docs, pushed to GitHub (vkinnnnn/HR-ANALYTICS). All code live.
 
 ## Session History
 
@@ -17,16 +17,16 @@
 8. Push to GitHub failed — needs authentication (PAT or gh CLI)
 
 **Where I stopped:**
-- Git repo initialized with commit 965cc63 on `main` branch
-- Remote set to https://github.com/Regata3010/HR-Analytics.git
-- Push blocked by auth — user needs to run `gh auth login` or provide PAT
-- All code is deployed and live
+- All code pushed to GitHub (vkinnnnn/HR-ANALYTICS) — 3 commits on main
+- taxonomy.py built (LLM batch classifier for job families, grades, move types)
+- API docs rewritten for workforce analytics
+- Everything deployed and live
 
 **What's next:**
-- Authenticate with GitHub and push
-- Build taxonomy.py (LLM-based job family/grade classification)
-- Update docs/api-deep-dive.md for new workforce API
 - Test each frontend page end-to-end against live backend
+- Integrate taxonomy.py into data_loader (auto-run on startup)
+- Build the Insights page to display taxonomy results
+- Redeploy backend with taxonomy module
 
 
 ### 2026-03-27 — Full Platform Pivot & Redeployment
@@ -134,9 +134,10 @@
 - ❌ Git repo initialization and push to GitHub
 
 ### Where I Stopped
-- Git repo initialized, commit 965cc63 on `main` branch, push pending GitHub auth
+- All code pushed to GitHub: https://github.com/vkinnnnn/HR-ANALYTICS (3 commits on main)
 - All code deployed and live (Firebase + Cloud Run)
-- Next: GitHub push → taxonomy.py → update API docs → end-to-end frontend testing
+- taxonomy.py built, API docs rewritten
+- Next: integrate taxonomy into pipeline, test frontend pages, redeploy
 
 ---
 
@@ -159,7 +160,7 @@
 3. **OpenAI key validity** — The key in env.yaml (sk-or-v1-...) needs to be valid for chat and report generation to work.
 4. **gcloud path** — gcloud.cmd is at `/c/Users/chira/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd` — not in PATH, must be referenced by full path.
 5. **Headcount trend may be slow** — The /api/workforce/headcount-trend endpoint iterates over every month since first hire. Could be optimized.
-6. **No git repo** — Project is not yet initialized as a git repository.
+6. **GitHub repo** — https://github.com/vkinnnnn/HR-ANALYTICS (NOT Regata3010 — that's the friend's reference repo). PAT removed from remote URL after push.
 
 ---
 
