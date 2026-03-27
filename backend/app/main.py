@@ -17,6 +17,7 @@ from .routers import (
     reports,
     upload,
     taxonomy_router,
+    pipeline_router,
 )
 
 
@@ -66,6 +67,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["AI Chat"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
 app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxonomy"])
+app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
 
 
 @app.get("/")

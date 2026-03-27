@@ -19,10 +19,18 @@ class Settings(BaseSettings):
 
     # Paths
     OUTPUT_DIR: str = "output"
+    DATA_DIR: str = ""
+    UPLOAD_DIR: str = ""
+    CHECKPOINT_DIR: str = "checkpoints"
 
-    # ROI defaults
-    REPLACEMENT_COST: float = 15000.0
-    REDUCTION_RATE: float = 0.31
+    # Pipeline batch processing
+    DEFAULT_BATCH_SIZE: int = 50
+    MAX_WORKERS: int = 4
+    MAX_RETRIES: int = 3
+    CHECKPOINT_EVERY_N_BATCHES: int = 5
+
+    # File limits
+    MAX_UPLOAD_SIZE_MB: int = 100
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

@@ -46,6 +46,7 @@ const NAV_GROUPS = [
     label: 'Operations',
     color: '#fbbf24',
     items: [
+      { to: '/pipeline', icon: Activity, label: 'Pipeline Hub' },
       { to: '/upload', icon: Upload, label: 'Data Upload' },
       { to: '/reports', icon: FileText, label: 'Reports' },
       { to: '/settings', icon: Settings, label: 'Settings' },

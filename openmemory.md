@@ -1,7 +1,32 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Fixed broken endpoints, added taxonomy-enriched dimensions (8 workforce + 3 turnover), updated Workforce page with 8 tabs. All deployed + pushed.
+2026-03-27 — Fixed all crashing pages (Tenure, Turnover, Careers, Org, Upload). All 13 pages now render correctly. 9 commits on main.
+
+### 2026-03-27 — Fix All Page Crashes (Session 6)
+**What was done:**
+1. User reported Tenure, Careers, Turnover, Org, Upload pages crashing/not loading
+2. Tested all API endpoints — all respond correctly in <1.5s
+3. Root cause: frontend interface field names didn't match actual API response field names
+4. Fixed Tenure.tsx: 7 interface fields, retention_pct dataKey, long-tenured table (job_title not name)
+5. Fixed Turnover.tsx: summary fields, trend departures dataKey, danger zones unwrap from anomalous_months
+6. Fixed Careers.tsx: PK_PERSON type, paths unwrap two_step+three_step, velocity endpoint
+7. Fixed Org.tsx: growth timeline pivot logic, restructuring anomalous_months, removed dead extractDeptKeys
+8. Fixed Upload.tsx: status fields (employee_count, history_count, is_loaded)
+9. All built, deployed, pushed (commit 3334c5c)
+
+### 2026-03-27 — Comprehensive Frontend-API Alignment (Session 5)
+**What was done:**
+1. Ran comprehensive audit of all 13 pages vs actual API responses — found 18 mismatches
+2. Fixed Careers.tsx (3): field renames + stuck_count from array
+3. Fixed Managers.tsx (3): span field renames + revolving_door from retention endpoint
+4. Fixed Org.tsx (2): dept_size field renames
+5. Fixed Tenure.tsx (4): unwrap .data.data, cohort dataKey total, bin not bucket
+6. Fixed Turnover.tsx (1): unwrap .data.data on all set calls
+7. Fixed Dashboard.tsx (1): tenure XAxis bin not bucket
+8. Fixed FlightRisk.tsx (4): compute high_risk from array, train_samples from model_info
+9. Verified all new taxonomy endpoints live: by-grade-band, by-function-family, stuck-employees
+10. Deployed frontend + backend, pushed commit 93775aa
 
 ### 2026-03-27 — Bug Fixes + Taxonomy Dimensions (Session 4)
 **What was done:**

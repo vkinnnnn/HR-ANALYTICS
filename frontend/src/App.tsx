@@ -14,6 +14,7 @@ import { Insights } from './pages/Insights';
 import { Upload } from './pages/Upload';
 import { Reports } from './pages/Reports';
 import { SettingsPage } from './pages/SettingsPage';
+import { PipelineHub } from './pages/PipelineHub';
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/org" element={<Org />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/insights" element={<Insights />} />
+          <Route path="/pipeline" element={<PipelineHub />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<SettingsPage />} />
