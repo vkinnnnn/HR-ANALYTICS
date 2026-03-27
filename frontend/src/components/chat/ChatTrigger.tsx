@@ -1,5 +1,3 @@
-import { Sparkles } from 'lucide-react';
-
 interface ChatTriggerProps {
   onClick: () => void;
   hasNotification?: boolean;
@@ -12,42 +10,48 @@ export function ChatTrigger({ onClick, hasNotification, isOpen }: ChatTriggerPro
   return (
     <button
       onClick={onClick}
+      aria-label="Open AI Assistant"
       style={{
         position: 'fixed',
         bottom: 24,
         right: 24,
         zIndex: 100,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '10px 20px',
-        borderRadius: 9999,
-        background: 'linear-gradient(135deg, #FF8A4C, #e85d04)',
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
         border: 'none',
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 700,
+        padding: 0,
         cursor: 'pointer',
-        boxShadow: '0 0 20px rgba(255,138,76,0.25), 0 0 40px rgba(255,138,76,0.10)',
-        transition: 'transform 220ms cubic-bezier(.4,0,.2,1), box-shadow 220ms cubic-bezier(.4,0,.2,1)',
+        background: 'transparent',
+        animation: 'orbGlow 3s ease-in-out infinite',
+        transition: 'transform 200ms cubic-bezier(.4,0,.2,1), box-shadow 200ms',
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = 'scale(1.03)';
-        e.currentTarget.style.boxShadow = '0 0 28px rgba(255,138,76,0.35), 0 0 56px rgba(255,138,76,0.15)';
+        e.currentTarget.style.transform = 'scale(1.05)';
+        e.currentTarget.style.boxShadow = '0 0 32px rgba(255,138,76,0.5), 0 0 64px rgba(255,138,76,0.2)';
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'scale(1)';
-        e.currentTarget.style.boxShadow = '0 0 20px rgba(255,138,76,0.25), 0 0 40px rgba(255,138,76,0.10)';
+        e.currentTarget.style.boxShadow = '';
       }}
     >
-      <Sparkles size={14} />
-      Ask AI
+      <img
+        src="/assets/fire-orb-md.png"
+        alt="AI Assistant"
+        style={{ width: 48, height: 48, borderRadius: '50%', display: 'block', margin: '4px auto' }}
+        onError={e => {
+          // CSS fallback if image missing
+          const el = e.currentTarget;
+          el.style.display = 'none';
+          el.parentElement!.classList.add('fire-orb-fallback');
+        }}
+      />
       {hasNotification && (
         <span
           style={{
             position: 'absolute',
-            top: -3,
-            right: -3,
+            top: 0,
+            right: 0,
             width: 10,
             height: 10,
             borderRadius: '50%',

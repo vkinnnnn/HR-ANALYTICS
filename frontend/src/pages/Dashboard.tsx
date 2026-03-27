@@ -94,13 +94,8 @@ export function Dashboard({ onChartClick }: DashboardProps) {
     load();
   }, []);
 
-  // Compute company-average turnover for reference line
-  const companyAvgTurnover = useMemo(() => {
-    if (!deptTurnover.length) return 0;
-    const totalDeparted = deptTurnover.reduce((s, d) => s + d.departed, 0);
-    const totalEmp = deptTurnover.reduce((s, d) => s + d.total, 0);
-    return totalEmp > 0 ? Math.round(totalDeparted / totalEmp * 100 * 10) / 10 : 0;
-  }, [deptTurnover]);
+  // Use the COMPANY-WIDE turnover rate from summary (not from top-10 slice)
+  const companyAvgTurnover = summary?.turnover_rate ?? 0;
 
   // Generate AI insight from data
   const insightText = useMemo(() => {
@@ -414,9 +409,9 @@ export function Dashboard({ onChartClick }: DashboardProps) {
                 const isHigh = pct >= 80;
                 const isMed = pct >= 60 && pct < 80;
                 const badgeColor = isHigh ? '#fb7185' : isMed ? '#fbbf24' : '#34d399';
-                const displayTitle = emp.job_title && emp.job_title !== 'nan'
+                const displayTitle = emp.job_title && emp.job_title !== 'nan' && emp.job_title !== 'null'
                   ? emp.job_title
-                  : `EMP-${emp.pk_person}`;
+                  : 'Untitled Role';
                 return (
                   <div
                     key={i}

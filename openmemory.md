@@ -61,10 +61,52 @@
 21. **Local Report Fallback** — reports.py generates data-driven executive summary without LLM
 22. **README** — Complete rewrite with setup guide, architecture, all 14 pages, API reference, env vars
 
+### Session 10b — Product Vision: Fire Orb AI Assistant
+
+**Product vision:** "Workforce IQ" — Bloomberg Terminal for people data. Serious, premium, data-dense.
+
+**Fire Orb Identity:**
+- 3D glossy black glass orb with orange flame = AI assistant visual identity
+- PNGs from Figma: `public/assets/fire-orb-{lg,md,sm}.png` (120, 48, 28px)
+- CSS fallback: radial-gradient orb with warm inner glow
+- Pulsing glow animation: `orbGlow 3s ease-in-out infinite`
+
+**AI Side Panel Rebuild (replaced entire chatbot system):**
+1. **Removed AI Chatbot page** — deleted from sidebar nav + routes, no longer a page
+2. **Fire orb trigger** — 56x56 circle (not pill), fire-orb-md.png, orbGlow animation, notification badge
+3. **ChatPanel complete rebuild:**
+   - Header: 60px, fire-orb-sm + "Workforce AI" + model badge from settings API + Clear + Close
+   - Empty state: large fire orb (120px), welcome text, 2x2 starter prompt cards
+   - Messages: AI avatar (fire-orb-sm), user right/AI left with spec border-radius, timestamp separators
+   - System messages: proactive insight alerts in orange-tinted card
+   - Typing indicator: 3 dots with dotBounce animation + fire orb avatar
+   - Inline charts: mini area/bar/pie with highlight support, inside message bubbles
+   - Input: 14px radius, focus glow ring, 34px send button, Enter/Shift+Enter
+   - Escape to close
+4. **Proactive insights:** App checks danger-zones + flight-risk on load, shows notification badge, pre-loads system message
+5. **Context awareness:** page-specific suggested prompts for all 7+ page types, chart-click auto-ask
+6. **Model name:** fetched from `/api/settings/llm`, displayed in header badge
+
+**Turnover two-color fix:**
+- Bug: companyAvgTurnover was computed from top-10 slice (all ~100%), making all bars emerald
+- Fix: now uses `summary.turnover_rate` (55.0%) from company-wide data → proper rose/emerald split
+
+**NaN display fix:** Changed fallback from "EMP-{id}" to "Untitled Role"
+
+**CSS additions:** `orbGlow`, `dotBounce`, `.fire-orb-fallback` keyframes/class
+
+**Files created/modified:**
+- `frontend/public/assets/fire-orb-{lg,md,sm}.png` — NEW (copied from Figma exports)
+- `frontend/src/components/chat/ChatTrigger.tsx` — full rewrite (fire orb)
+- `frontend/src/components/chat/ChatPanel.tsx` — full rewrite (complete spec)
+- `frontend/src/components/layout/Sidebar.tsx` — removed AI Chatbot nav item
+- `frontend/src/App.tsx` — full rewrite (proactive insights, model name, removed /chat route)
+- `frontend/src/pages/Dashboard.tsx` — turnover avg fix, NaN→Untitled Role
+- `frontend/src/index.css` — orbGlow, dotBounce, fire-orb-fallback
+
 **Known Issues:**
 - new_hires_90d = 0 because dataset is historical (no hires in last 90 days). This is correct data behavior.
 - Port 8000 had zombie processes on Windows; running on port 8003
-- Figma MCP OAuth not completed yet — validation pass (step 14) pending
 
 ### Session 9 — MCP + Skills Ecosystem
 - Added Memory MCP (`@modelcontextprotocol/server-memory`) — persistent knowledge graph at `.mcp-data/memory/`

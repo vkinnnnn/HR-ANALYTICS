@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, TrendingDown, Clock, AlertTriangle,
-  GitBranch, UserCheck, Building2, MessageSquare, Sparkles,
+  GitBranch, UserCheck, Building2, Sparkles,
   Upload, FileText, Settings, ChevronLeft, ChevronRight, Activity,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -38,7 +38,6 @@ const NAV_GROUPS = [
     label: 'Intelligence',
     color: '#a78bfa',
     items: [
-      { to: '/chat', icon: MessageSquare, label: 'AI Chatbot' },
       { to: '/insights', icon: Sparkles, label: 'AI Insights' },
     ],
   },
