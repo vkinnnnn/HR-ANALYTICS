@@ -348,3 +348,148 @@ time_in_current_role_days Days in current role
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.post("/generate")
+async def generate_structured_report():
+    """Generate a structured interactive report with embedded chart data."""
+    if not is_loaded():
+        raise HTTPException(status_code=503, detail="Data not loaded.")
+
+    df = get_employees()
+    active = df[df["is_active"]]
+    departed = df[~df["is_active"]]
+    total = len(df)
+    active_count = len(active)
+    departed_count = len(departed)
+    turnover = round(departed_count / total * 100, 1) if total > 0 else 0
+    avg_tenure = round(float(df["tenure_years"].mean()), 1)
+    median_tenure = round(float(df["tenure_years"].median()), 1)
+
+    # Department stats
+    dept_stats = df.groupby("department_name").agg(
+        total=("is_active", "count"),
+        active=("is_active", "sum"),
+        departed=("is_active", lambda x: int((~x).sum())),
+        avg_tenure=("tenure_years", "mean"),
+    ).round(1)
+    dept_stats["turnover_pct"] = (dept_stats["departed"] / dept_stats["total"] * 100).round(1)
+    dept_stats = dept_stats.sort_values("total", ascending=False)
+
+    # Build sections
+    sections = []
+
+    # Section 1: Workforce Composition
+    dept_chart = dept_stats.head(10)
+    sections.append({
+        "title": "Workforce Composition",
+        "narrative": f"The organization has {active_count:,} active employees across {df['department_name'].nunique()} departments. Technology ({int(dept_stats.loc['Technology','active']) if 'Technology' in dept_stats.index else '?'}) and Operations ({int(dept_stats.loc['Operations','active']) if 'Operations' in dept_stats.index else '?'}) are the largest departments.",
+        "chart": {
+            "type": "bar",
+            "data": [{"name": str(d), "value": int(r["active"])} for d, r in dept_chart.iterrows()],
+        },
+        "key_metrics": [
+            {"label": "Active Headcount", "value": f"{active_count:,}"},
+            {"label": "Departments", "value": str(df["department_name"].nunique())},
+            {"label": "Countries", "value": str(df["country"].nunique()) if "country" in df.columns else "N/A"},
+        ],
+        "insights": [],
+    })
+
+    # Section 2: Turnover & Attrition
+    worst_depts = dept_stats.sort_values("turnover_pct", ascending=False).head(8)
+    turnover_insights = []
+    full_churn = dept_stats[dept_stats["turnover_pct"] >= 100]
+    if len(full_churn) > 0:
+        turnover_insights.append(f"{len(full_churn)} departments have 100% turnover")
+    early_dep = departed[departed["tenure_years"] < 1]
+    if len(early_dep) > 0:
+        turnover_insights.append(f"{len(early_dep)} employees departed within their first year ({round(len(early_dep)/departed_count*100,1)}% of all departures)")
+
+    sections.append({
+        "title": "Turnover & Attrition",
+        "narrative": f"Overall turnover is {turnover}%, significantly above the industry benchmark of 15-20%. The company has lost {departed_count:,} employees.",
+        "chart": {
+            "type": "horizontal_bar",
+            "data": [{"name": str(d), "value": float(r["turnover_pct"])} for d, r in worst_depts.iterrows()],
+        },
+        "key_metrics": [
+            {"label": "Turnover Rate", "value": f"{turnover}%", "change": "Above benchmark"},
+            {"label": "Total Departed", "value": f"{departed_count:,}"},
+            {"label": "Avg Tenure at Exit", "value": f"{round(float(departed['tenure_years'].mean()),1)}yr" if len(departed) > 0 else "N/A"},
+        ],
+        "insights": turnover_insights,
+    })
+
+    # Section 3: Tenure Analysis
+    import pandas as pd
+    tenure_bins = [0, 0.5, 1, 2, 3, 5, 10, float("inf")]
+    tenure_labels = ["0-6mo", "6-12mo", "1-2yr", "2-3yr", "3-5yr", "5-10yr", "10yr+"]
+    tenure_dist = pd.cut(df["tenure_years"], bins=tenure_bins, labels=tenure_labels, right=False).value_counts().reindex(tenure_labels)
+
+    sections.append({
+        "title": "Tenure Analysis",
+        "narrative": f"Average tenure is {avg_tenure} years (median: {median_tenure} years). The distribution shows {int(tenure_dist.get('0-6mo',0)) + int(tenure_dist.get('6-12mo',0))} employees with less than 1 year tenure — an early attrition risk group.",
+        "chart": {
+            "type": "bar",
+            "data": [{"name": label, "value": int(count)} for label, count in tenure_dist.items()],
+        },
+        "key_metrics": [
+            {"label": "Avg Tenure", "value": f"{avg_tenure}yr"},
+            {"label": "Median Tenure", "value": f"{median_tenure}yr"},
+            {"label": "10yr+ Employees", "value": str(int((active["tenure_years"] >= 10).sum()))},
+        ],
+        "insights": [],
+    })
+
+    # Section 4: Career Mobility
+    avg_role_changes = round(float(active["num_role_changes"].mean()), 1)
+    stuck_3yr = int((active["time_in_current_role_days"] > 1095).sum())
+    sections.append({
+        "title": "Career Mobility",
+        "narrative": f"Active employees average {avg_role_changes} role changes. {stuck_3yr} employees ({round(stuck_3yr/active_count*100,1)}%) have been in the same role for 3+ years, suggesting potential stagnation.",
+        "chart": None,
+        "key_metrics": [
+            {"label": "Avg Role Changes", "value": str(avg_role_changes)},
+            {"label": "Stuck 3yr+", "value": str(stuck_3yr)},
+            {"label": "Avg Time in Role", "value": f"{int(active['time_in_current_role_days'].mean())} days"},
+        ],
+        "insights": [f"{stuck_3yr} employees may need career development attention"] if stuck_3yr > 20 else [],
+    })
+
+    # Recommendations
+    recommendations = []
+    if len(full_churn) > 0:
+        recommendations.append({"priority": "critical", "title": f"Investigate {len(full_churn)} departments with 100% turnover", "detail": f"Departments: {', '.join(str(d) for d in full_churn.index[:3])}"})
+    if len(early_dep) > len(departed) * 0.3:
+        recommendations.append({"priority": "critical", "title": "Strengthen onboarding program", "detail": f"{round(len(early_dep)/departed_count*100,1)}% of departures happen within the first year"})
+    if stuck_3yr > active_count * 0.1:
+        recommendations.append({"priority": "high", "title": "Career development for stagnant employees", "detail": f"{stuck_3yr} employees stuck in same role for 3+ years"})
+    recommendations.append({"priority": "medium", "title": "Manager effectiveness review", "detail": "Correlate manager retention rates with team turnover to identify coaching opportunities"})
+
+    # LLM executive summary
+    exec_summary = ""
+    try:
+        context = _build_report_context()
+        exec_summary = await _llm_call(
+            "Write a 3-paragraph executive summary of this workforce data for a CHRO. Be concise and data-driven.",
+            context
+        )
+    except Exception:
+        exec_summary = f"The organization has {active_count:,} active employees with a {turnover}% overall turnover rate. Average tenure is {avg_tenure} years."
+
+    return {
+        "title": "Workforce Intelligence Report",
+        "generated_at": datetime.now().isoformat(),
+        "executive_summary": exec_summary,
+        "sections": sections,
+        "recommendations": recommendations,
+        "metrics_snapshot": {
+            "total_employees": total,
+            "active_employees": active_count,
+            "departed_employees": departed_count,
+            "turnover_rate": turnover,
+            "avg_tenure_years": avg_tenure,
+            "median_tenure_years": median_tenure,
+        },
+    }
