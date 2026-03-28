@@ -1,11 +1,71 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Session 10 complete: Dashboard overhaul, fire orb AI assistant, deep analysis chatbot, multi-LLM, pipeline fix.
+2026-03-27 — Session 11: shadcn/ui, CSS fire orb, navigation agent, structured reports, user profile.
 
 ---
 
 ## Session History (Reverse Chronological)
+
+### Session 11 — Major Feature Build (shadcn/ui, Navigation, Reports, Profile)
+
+**Decision:** Did NOT fully migrate existing components to shadcn primitives (would break too much). Instead, installed shadcn as a parallel library — new features use shadcn, existing code untouched.
+
+#### 11a — shadcn/ui Foundation
+- Initialized shadcn/ui v4.1 with Tailwind v4 + Vite
+- Added `@/*` path alias in tsconfig + vite.config
+- Installed 14 components: button, card, badge, sheet, scroll-area, tooltip, separator, avatar, dropdown-menu, dialog, input, textarea, tabs
+- Fixed CSS: dark-only `:root` (removed light mode), orange primary accent, kept Inter font
+- Preserved custom Badge, Tabs, Panel, KpiCard, AnimatedNumber (no migration)
+- Restored utils.ts (formatNumber, CHART_COLORS + shadcn's cn/twMerge)
+
+#### 11b — CSS Fire Orb + Chat Rebuild
+- Pure CSS `.fire-orb` class: radial-gradient, `flameShift` animation, `::after` glass reflection
+- Resolution-independent — replaces all PNG references
+- ChatTrigger: 56px CSS fire orb circle (no more img tags)
+- ChatPanel: all fire-orb-sm.png → `.fire-orb` CSS class (header, message avatars, empty state)
+- Removed model branding from header (no more "GPT-4o-mini" badge)
+- Added `onNavigate` prop for AI-driven page navigation
+
+#### 11c — Navigation Agent
+- Backend: `NavigationCommand` model (action, route, scroll_to, highlight)
+- System prompt: NAVIGATE: /route#section format
+- `_parse_response` extracts navigation commands from LLM output
+- `_detect_navigation` local fallback: keyword → route mapping for "show me", "take me to"
+- Frontend: ChatPanel processes navigation → React Router navigate + scroll + highlight
+- `ai-highlight-pulse` CSS: 3-pulse orange glow on target section
+- Dashboard section IDs: kpi-cards, headcount-chart, turnover-chart, tenure-chart, flight-risk-table
+- Panel component: added `id` prop
+
+#### 11d — Onboarding Tour
+- First-time detection via `localStorage.workforceiq_onboarded`
+- Auto-opens chat panel after 2s with welcome system message
+- "Restart Tour" option in profile dropdown resets localStorage
+
+#### 11e — Structured Report Engine
+- `POST /api/reports/generate`: structured JSON with sections, chart data, metrics, recommendations
+- 4 sections: Workforce Composition, Turnover & Attrition, Tenure Analysis, Career Mobility
+- Auto-generated recommendations with priority levels (critical/high/medium)
+- LLM executive summary with local fallback
+- Reports page: interactive rendering with embedded Recharts, metric cards, insight callouts
+
+#### 11f — User Profile + Company Branding
+- Sidebar: user avatar section with initials, name, role
+- Profile dropdown: Settings, Restart Tour, Sign Out
+- Settings page: Profile & Company section (name, role, company, industry)
+- localStorage persistence (workforceiq_user_name, _role, _company, _industry)
+- 8 role options (CEO → People Analyst), 7 industry options
+
+#### 11g — Port/CORS Cleanup
+- Backend CORS: added localhost:5173 (Vite default)
+- API base URL: port 8004 (zombie processes on 8000-8003)
+
+**Git Commits (Session 11):**
+- shadcn/ui foundation
+- CSS fire orb + chat rebuild + navigation plumbing
+- Navigation agent + onboarding tour + section IDs
+- Structured report engine + interactive report page
+- User profile, company branding, sidebar identity
 
 ### Session 10 — Complete UI/UX Overhaul + AI Assistant Rebuild
 

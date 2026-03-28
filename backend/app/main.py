@@ -72,6 +72,7 @@ app = FastAPI(
 
 allowed_origins = [
     "http://localhost:3000",
+    "http://localhost:5173",
 ]
 extra_origins = os.environ.get("CORS_ORIGINS", "")
 if extra_origins:
