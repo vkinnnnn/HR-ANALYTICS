@@ -554,6 +554,9 @@ async def chat_query(query: ChatQuery):
         )
         raw_answer = response.choices[0].message.content
         answer, chart_data, suggestions, navigation = _parse_response(raw_answer)
+        # If LLM didn't include navigation but user clearly wants to navigate, add it
+        if not navigation:
+            navigation = _detect_navigation(query.question)
     except ValueError:
         answer, chart_data, suggestions = _local_chat_response(query.question)
         navigation = _detect_navigation(query.question)
