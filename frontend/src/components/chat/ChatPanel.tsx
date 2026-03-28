@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { X, ArrowUp } from 'lucide-react';
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
+  PieChart, Pie, Cell, CartesianGrid,
 } from 'recharts';
 import api from '../../lib/api';
 import { ChartTooltip } from '../charts/ChartTooltip';

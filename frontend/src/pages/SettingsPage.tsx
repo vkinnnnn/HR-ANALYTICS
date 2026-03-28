@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Settings, Database, Cpu, ShieldAlert, FolderOpen, Zap, AlertTriangle,
+  Settings, Database, ShieldAlert, FolderOpen, Zap, AlertTriangle,
   Check, Loader2, RefreshCw, User, Building,
 } from 'lucide-react';
 import { PageHero } from '../components/ui/PageHero';
