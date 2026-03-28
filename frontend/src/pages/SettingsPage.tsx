@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, Database, Cpu, ShieldAlert, FolderOpen, Zap, AlertTriangle,
-  Check, Loader2, RefreshCw,
+  Check, Loader2, RefreshCw, User, Building,
 } from 'lucide-react';
 import { PageHero } from '../components/ui/PageHero';
 import { Panel } from '../components/ui/Panel';
@@ -92,6 +92,9 @@ export function SettingsPage() {
       />
 
       <div style={{ display: 'grid', gap: 20 }}>
+        {/* User Profile + Company */}
+        <ProfileSection />
+
         {/* LLM Provider Configuration */}
         <Panel delay={0}>
           <SectionHeader
@@ -310,6 +313,85 @@ export function SettingsPage() {
         </Panel>
       </div>
     </div>
+  );
+}
+
+function ProfileSection() {
+  const [name, setName] = useState(localStorage.getItem('workforceiq_user_name') || '');
+  const [role, setRole] = useState(localStorage.getItem('workforceiq_user_role') || 'HR Leader');
+  const [company, setCompany] = useState(localStorage.getItem('workforceiq_company') || 'Workhuman');
+  const [industry, setIndustry] = useState(localStorage.getItem('workforceiq_industry') || 'Technology');
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  function saveProfile() {
+    localStorage.setItem('workforceiq_user_name', name);
+    localStorage.setItem('workforceiq_user_role', role);
+    localStorage.setItem('workforceiq_company', company);
+    localStorage.setItem('workforceiq_industry', industry);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2000);
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '10px 14px', borderRadius: 10,
+    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
+    color: '#fafafa', fontSize: 13, outline: 'none', fontFamily: 'inherit',
+  };
+
+  return (
+    <Panel delay={0}>
+      <SectionHeader icon={<User size={16} />} title="Profile & Company" subtitle="Your identity and organization settings" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: 6 }}>Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={inputStyle} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: 6 }}>Role</label>
+          <select value={role} onChange={e => setRole(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+            <option value="CEO">CEO</option>
+            <option value="CHRO">CHRO</option>
+            <option value="VP of People">VP of People</option>
+            <option value="HR Director">HR Director</option>
+            <option value="HR Manager">HR Manager</option>
+            <option value="HR Business Partner">HR Business Partner</option>
+            <option value="HR Leader">HR Leader</option>
+            <option value="People Analyst">People Analyst</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: 6 }}>Company</label>
+          <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Company name" style={inputStyle} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: 6 }}>Industry</label>
+          <select value={industry} onChange={e => setIndustry(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+            <option value="Technology">Technology</option>
+            <option value="Finance">Finance</option>
+            <option value="Healthcare">Healthcare</option>
+            <option value="Retail">Retail</option>
+            <option value="Manufacturing">Manufacturing</option>
+            <option value="Professional Services">Professional Services</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 mt-4">
+        <button
+          onClick={saveProfile}
+          style={{
+            padding: '10px 24px', borderRadius: 9999,
+            background: 'linear-gradient(135deg, #FF8A4C, #e85d04)',
+            border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}
+        >
+          {profileSaved ? <Check size={14} /> : <Building size={14} />}
+          {profileSaved ? 'Saved!' : 'Save Profile'}
+        </button>
+        {profileSaved && <span style={{ fontSize: 12, color: '#34d399' }}>Profile updated</span>}
+      </div>
+    </Panel>
   );
 }
 

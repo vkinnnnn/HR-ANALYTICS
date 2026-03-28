@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, TrendingDown, Clock, AlertTriangle,
   GitBranch, UserCheck, Building2, Sparkles,
   Upload, FileText, Settings, ChevronLeft, ChevronRight, Activity,
+  User, LogOut, HelpCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -55,6 +56,11 @@ const NAV_GROUPS = [
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const userName = localStorage.getItem('workforceiq_user_name') || 'User';
+  const userRole = localStorage.getItem('workforceiq_user_role') || 'HR Leader';
+  const initials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
   return (
     <aside
@@ -109,6 +115,79 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* User Profile Section */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: collapsed ? '8px 4px' : '8px' }}>
+        <div className="relative">
+          <button
+            onClick={() => setShowProfile(!showProfile)}
+            className="flex items-center gap-2.5 w-full rounded-[8px] hover:bg-subtle transition-colors"
+            style={{ padding: collapsed ? '8px' : '8px 10px', justifyContent: collapsed ? 'center' : 'flex-start' }}
+          >
+            <div
+              className="flex items-center justify-center shrink-0"
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'linear-gradient(135deg, #FF8A4C20, #e85d0420)',
+                border: '1px solid rgba(255,138,76,0.2)',
+                fontSize: 10, fontWeight: 700, color: '#FF8A4C',
+              }}
+            >
+              {initials}
+            </div>
+            {!collapsed && (
+              <div style={{ textAlign: 'left', minWidth: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 600, color: '#fafafa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</p>
+                <p style={{ fontSize: 10, color: '#52525b' }}>{userRole}</p>
+              </div>
+            )}
+          </button>
+
+          {/* Profile Dropdown */}
+          {showProfile && (
+            <div
+              style={{
+                position: 'absolute', bottom: '100%', left: 0, right: 0,
+                marginBottom: 4, padding: 4, borderRadius: 12,
+                background: 'rgba(19,19,24,0.95)', backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255,255,255,0.09)',
+                boxShadow: '0 -8px 30px rgba(0,0,0,0.4)',
+                minWidth: 180, zIndex: 60,
+              }}
+            >
+              <NavLink
+                to="/settings"
+                onClick={() => setShowProfile(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-[8px] hover:bg-subtle transition-colors"
+                style={{ color: '#a1a1aa', fontSize: 12 }}
+              >
+                <User size={14} />
+                Profile & Settings
+              </NavLink>
+              <button
+                onClick={() => {
+                  setShowProfile(false);
+                  localStorage.removeItem('workforceiq_onboarded');
+                  window.location.reload();
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-[8px] hover:bg-subtle transition-colors w-full"
+                style={{ color: '#a1a1aa', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <HelpCircle size={14} />
+                Restart Tour
+              </button>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
+              <button
+                className="flex items-center gap-2.5 px-3 py-2 rounded-[8px] hover:bg-subtle transition-colors w-full"
+                style={{ color: '#71717a', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <LogOut size={14} />
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       <button
         onClick={() => setCollapsed(!collapsed)}
