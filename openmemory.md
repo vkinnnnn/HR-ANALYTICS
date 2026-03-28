@@ -1,7 +1,7 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Session 11: shadcn/ui, CSS fire orb, navigation agent, structured reports, user profile.
+2026-03-27 — Session 11 complete. All 6 tasks done + navigation fallback fix.
 
 ---
 
@@ -60,12 +60,18 @@
 - Backend CORS: added localhost:5173 (Vite default)
 - API base URL: port 8004 (zombie processes on 8000-8003)
 
+#### 11h — Navigation Fallback Fix
+- LLM often responds to "take me to X" with analysis but no NAVIGATE: command
+- Fix: `_detect_navigation` now runs EVEN when LLM succeeds, as a fallback
+- Catches "show me", "take me to", "go to", "navigate", "open", "where" + keyword matching
+
 **Git Commits (Session 11):**
-- shadcn/ui foundation
-- CSS fire orb + chat rebuild + navigation plumbing
-- Navigation agent + onboarding tour + section IDs
-- Structured report engine + interactive report page
-- User profile, company branding, sidebar identity
+- `9956836` — feat(s11): CSS fire orb + chat rebuild + navigation plumbing
+- `c45355d` — feat(s11): navigation agent + onboarding tour + section IDs
+- `5e0a622` — feat(s11): structured report engine + interactive report page
+- `7716aec` — feat(s11): user profile, company branding, sidebar identity
+- `2e49709` — feat(s11): port/CORS fix, openmemory Session 11 log
+- `92184f6` — fix: navigation fallback runs even when LLM responds without NAVIGATE
 
 ### Session 10 — Complete UI/UX Overhaul + AI Assistant Rebuild
 
