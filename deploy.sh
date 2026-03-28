@@ -36,8 +36,7 @@ gcloud run deploy $BACKEND_SERVICE \
   --region $REGION \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars "CORS_ORIGINS=https://${PROJECT_ID}.web.app,https://${PROJECT_ID}.firebaseapp.com" \
-  --set-env-vars "DATABASE_URL=sqlite+aiosqlite:///./hr_platform.db" \
+  --set-env-vars "^;;^CORS_ORIGINS=https://${PROJECT_ID}.web.app,https://${PROJECT_ID}.firebaseapp.com;;DATABASE_URL=sqlite+aiosqlite:///./hr_platform.db;;DATA_DIR=/app/wh_Dataset" \
   --memory 1Gi \
   --cpu 1 \
   --min-instances 0 \
