@@ -1,11 +1,48 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-27 — Session 11 complete. All 6 tasks done + navigation fallback fix.
+2026-03-28 — Session 12 complete. Full production deployment to GCP.
 
 ---
 
 ## Session History (Reverse Chronological)
+
+### Session 12 — Production Deployment (GCP Cloud Run + Firebase Hosting)
+
+**Scope:** Sync local project with GitHub, fix deployment issues, deploy backend + frontend to production.
+
+#### 12a — Git Sync
+- Cleaned duplicate entries in `.gitignore`
+- Updated `openmemory.md` session log
+- Pushed all commits to `origin/main`
+
+#### 12b — Production Build Fixes
+- Fixed 3 TypeScript unused import errors breaking `tsc -b` production build:
+  - `ChatPanel.tsx`: removed unused `LineChart`, `Line` from recharts
+  - `scroll-area.tsx`: removed unused `React` import
+  - `SettingsPage.tsx`: removed unused `Cpu` from lucide-react
+
+#### 12c — Backend Deployment (Google Cloud Run)
+- Deployed to Cloud Run: `hr-analytics-backend` service in `us-central1`
+- **Critical fix:** `DATA_DIR` env var — container path resolved to `/wh_Dataset` instead of `/app/wh_Dataset`
+- Fixed `deploy.sh` — gcloud `--set-env-vars` needs `^;;^` delimiter for comma-containing CORS origins
+- Service: 1GB RAM, 1 CPU, 0-3 instances, 5min timeout, unauthenticated
+
+#### 12d — Frontend Deployment (Firebase Hosting)
+- Built frontend with `VITE_API_URL` pointing to Cloud Run backend
+- Deployed to Firebase Hosting: `hr-analytics-f23c0.web.app`
+- SPA rewrites configured for React Router
+
+**Production URLs:**
+- Frontend: https://hr-analytics-f23c0.web.app
+- Backend API: https://hr-analytics-backend-ymez3d52nq-uc.a.run.app
+- API Docs: https://hr-analytics-backend-ymez3d52nq-uc.a.run.app/docs
+
+**Git Commits (Session 12):**
+- `d51c0bb` — chore: clean up .gitignore duplicates + update session log
+- `de5f0f7` — fix: remove unused imports breaking production build
+- `acd0d2c` — fix: deploy.sh DATA_DIR env var + gcloud env-var escaping
+- `56db891` — chore: add production API URL for frontend builds
 
 ### Session 11 — Major Feature Build (shadcn/ui, Navigation, Reports, Profile)
 
@@ -224,7 +261,15 @@
 
 ---
 
-## Current State (Post-Session 10)
+## Current State (Post-Session 12)
+
+### Deployment
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Frontend | Firebase Hosting | https://hr-analytics-f23c0.web.app |
+| Backend | Google Cloud Run | https://hr-analytics-backend-ymez3d52nq-uc.a.run.app |
+| API Docs | Swagger UI | https://hr-analytics-backend-ymez3d52nq-uc.a.run.app/docs |
+| GitHub | Repository | https://github.com/vkinnnnn/HR-ANALYTICS |
 
 ### Backend — 14 routers, 90+ endpoints
 | Router | File | Key Features |
@@ -304,10 +349,11 @@
 
 ## Known Issues
 
-1. **Port 8000 zombie processes** — Windows doesn't release sockets. Backend runs on port 8003.
+1. **Port 8000 zombie processes** — Windows doesn't release sockets. Local backend runs on port 8004.
 2. **new_hires_90d = 0** — Dataset is historical, no hires in last 90 days. Correct behavior.
-3. **gcloud not in PATH** — Use full path for deployment commands.
-4. **Suggestions parsing** — Some models don't follow SUGGESTIONS: format consistently.
+3. **Suggestions parsing** — Some models don't follow SUGGESTIONS: format consistently.
+4. **Cloud Run cold starts** — min-instances=0 means first request after idle may take 10-15s.
+5. **Redis unavailable in Cloud Run** — Falls back to thread-based job execution (non-blocking).
 
 ---
 
