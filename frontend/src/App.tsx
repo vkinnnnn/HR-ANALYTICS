@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { AmbientBackground } from './components/layout/AmbientBackground';
 import { ChatTrigger } from './components/chat/ChatTrigger';
@@ -21,21 +21,11 @@ import api from './lib/api';
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
   const [hasNotification, setHasNotification] = useState(false);
-  const [modelName, setModelName] = useState('');
-
-  // Fetch active model name from settings
-  useEffect(() => {
-    api.get('/api/settings/llm').then(res => {
-      const m = res.data?.model || '';
-      // Extract human-readable name
-      const name = m.includes('/') ? m.split('/').pop()?.replace(/:free$/, '') || m : m;
-      setModelName(name);
-    }).catch(() => {});
-  }, []);
 
   // Proactive insights: check for anomalies after data loads
   useEffect(() => {
@@ -145,7 +135,7 @@ function AppContent() {
         currentPage={location.pathname}
         prefillMessage={prefillMessage}
         onPrefillConsumed={() => setPrefillMessage(null)}
-        modelName={modelName}
+        onNavigate={navigate}
       />
     </>
   );

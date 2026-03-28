@@ -5,7 +5,6 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
 import api from '../../lib/api';
-import { Badge } from '../ui/Badge';
 import { ChartTooltip } from '../charts/ChartTooltip';
 
 const CHART_COLORS = ['#FF8A4C', '#34d399', '#a78bfa', '#60a5fa', '#fbbf24', '#fb7185', '#22d3ee', '#f472b6'];
@@ -56,12 +55,12 @@ interface ChatPanelProps {
   currentPage: string;
   prefillMessage?: string | null;
   onPrefillConsumed?: () => void;
-  modelName?: string;
+  onNavigate?: (route: string) => void;
 }
 
 export function ChatPanel({
   isOpen, onClose, messages, onSendMessage, onClearChat,
-  currentPage, prefillMessage, onPrefillConsumed, modelName,
+  currentPage, prefillMessage, onPrefillConsumed, onNavigate,
 }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -129,6 +128,26 @@ export function ChatPanel({
         timestamp: Date.now(),
       };
       onSendMessage(assistantMsg);
+
+      // Handle navigation commands from AI
+      if (res.data.navigation && onNavigate) {
+        const nav = res.data.navigation;
+        if (nav.action === 'navigate' && nav.route) {
+          onNavigate(nav.route);
+          setTimeout(() => {
+            if (nav.scroll_to) {
+              document.getElementById(nav.scroll_to)?.scrollIntoView({ behavior: 'smooth' });
+            }
+            if (nav.highlight) {
+              const el = document.getElementById(nav.highlight);
+              if (el) {
+                el.classList.add('ai-highlight-pulse');
+                setTimeout(() => el.classList.remove('ai-highlight-pulse'), 3000);
+              }
+            }
+          }, 500);
+        }
+      }
     } catch (err: any) {
       onSendMessage({
         role: 'assistant',
@@ -148,7 +167,6 @@ export function ChatPanel({
   }
 
   const prompts = PAGE_PROMPTS[currentPage] || PAGE_PROMPTS['/'];
-  const displayModel = modelName || 'Nemotron 120B';
 
   return (
     <div
@@ -183,14 +201,8 @@ export function ChatPanel({
         }}
       >
         <div className="flex items-center gap-3">
-          <img
-            src="/assets/fire-orb-sm.png"
-            alt=""
-            style={{ width: 28, height: 28, borderRadius: '50%' }}
-            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-          />
+          <div className="fire-orb" style={{ width: 28, height: 28, flexShrink: 0 }} />
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fafafa' }}>Workforce AI</span>
-          <Badge label={displayModel} color="#a78bfa" />
         </div>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
@@ -232,18 +244,7 @@ export function ChatPanel({
         {/* Empty State */}
         {messages.length === 0 && !isLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 20, paddingBottom: 20 }}>
-            <div style={{ position: 'relative' }}>
-              <img
-                src="/assets/fire-orb-lg.png"
-                alt="AI Assistant"
-                style={{ width: 120, height: 120, borderRadius: '50%', animation: 'orbGlow 3s ease-in-out infinite' }}
-                onError={e => {
-                  const el = e.currentTarget;
-                  el.style.display = 'none';
-                  el.parentElement!.innerHTML = '<div class="fire-orb-fallback" style="width:120px;height:120px;border-radius:50%;animation:orbGlow 3s ease-in-out infinite"></div>';
-                }}
-              />
-            </div>
+            <div className="fire-orb" style={{ width: 120, height: 120, animation: 'orbGlow 3s ease-in-out infinite' }} />
             <div style={{ textAlign: 'center' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#fafafa', marginBottom: 6 }}>
                 Ask me anything about your workforce
@@ -312,12 +313,7 @@ export function ChatPanel({
               <div style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-end' }}>
                 {/* AI avatar */}
                 {msg.role === 'assistant' && (
-                  <img
-                    src="/assets/fire-orb-sm.png"
-                    alt=""
-                    style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, marginBottom: 2 }}
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
+                  <div className="fire-orb" style={{ width: 24, height: 24, flexShrink: 0, marginBottom: 2 }} />
                 )}
                 <div
                   style={{
@@ -378,12 +374,7 @@ export function ChatPanel({
         {/* Typing indicator */}
         {isLoading && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <img
-              src="/assets/fire-orb-sm.png"
-              alt=""
-              style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0 }}
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-            />
+            <div className="fire-orb" style={{ width: 24, height: 24, flexShrink: 0 }} />
             <div style={{
               padding: '14px 18px',
               borderRadius: '16px 16px 16px 4px',

@@ -11,6 +11,7 @@ export function ChatTrigger({ onClick, hasNotification, isOpen }: ChatTriggerPro
     <button
       onClick={onClick}
       aria-label="Open AI Assistant"
+      className="fire-orb"
       style={{
         position: 'fixed',
         bottom: 24,
@@ -18,16 +19,14 @@ export function ChatTrigger({ onClick, hasNotification, isOpen }: ChatTriggerPro
         zIndex: 100,
         width: 56,
         height: 56,
-        borderRadius: '50%',
         border: 'none',
         padding: 0,
         cursor: 'pointer',
-        background: 'transparent',
-        animation: 'orbGlow 3s ease-in-out infinite',
+        animation: 'orbGlow 3s ease-in-out infinite, flameShift 3s ease-in-out infinite',
         transition: 'transform 200ms cubic-bezier(.4,0,.2,1), box-shadow 200ms',
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = 'scale(1.05)';
+        e.currentTarget.style.transform = 'scale(1.08)';
         e.currentTarget.style.boxShadow = '0 0 32px rgba(255,138,76,0.5), 0 0 64px rgba(255,138,76,0.2)';
       }}
       onMouseLeave={e => {
@@ -35,17 +34,6 @@ export function ChatTrigger({ onClick, hasNotification, isOpen }: ChatTriggerPro
         e.currentTarget.style.boxShadow = '';
       }}
     >
-      <img
-        src="/assets/fire-orb-md.png"
-        alt="AI Assistant"
-        style={{ width: 48, height: 48, borderRadius: '50%', display: 'block', margin: '4px auto' }}
-        onError={e => {
-          // CSS fallback if image missing
-          const el = e.currentTarget;
-          el.style.display = 'none';
-          el.parentElement!.classList.add('fire-orb-fallback');
-        }}
-      />
       {hasNotification && (
         <span
           style={{
@@ -58,6 +46,7 @@ export function ChatTrigger({ onClick, hasNotification, isOpen }: ChatTriggerPro
             background: '#FF8A4C',
             border: '2px solid #09090b',
             animation: 'glowPulse 2s infinite',
+            zIndex: 1,
           }}
         />
       )}
