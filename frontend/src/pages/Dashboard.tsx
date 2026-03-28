@@ -137,7 +137,7 @@ export function Dashboard({ onChartClick }: DashboardProps) {
       />
 
       {/* KPI Row — 4 cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
+      <div id="kpi-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
         <KpiCard
           label="Total Headcount"
           value={summary?.active ?? 0}
@@ -211,7 +211,7 @@ export function Dashboard({ onChartClick }: DashboardProps) {
       {/* Charts Row 1 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Headcount Trend */}
-        <Panel delay={240}>
+        <Panel delay={240} id="headcount-chart">
           <SectionHeader
             icon={<TrendingUp size={14} />}
             title="Headcount Trend"
@@ -260,7 +260,7 @@ export function Dashboard({ onChartClick }: DashboardProps) {
         </Panel>
 
         {/* Turnover by Department — two-color system */}
-        <Panel delay={300}>
+        <Panel delay={300} id="turnover-chart">
           <SectionHeader
             icon={<BarChart3 size={14} />}
             title="Turnover by Department"
@@ -331,7 +331,7 @@ export function Dashboard({ onChartClick }: DashboardProps) {
       {/* Charts Row 2 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* Tenure Distribution — meaningful bins */}
-        <Panel delay={360}>
+        <Panel delay={360} id="tenure-chart">
           <SectionHeader
             icon={<PieChart size={14} />}
             title="Tenure Distribution"
@@ -370,7 +370,7 @@ export function Dashboard({ onChartClick }: DashboardProps) {
         </Panel>
 
         {/* Flight Risk Table */}
-        <Panel delay={420}>
+        <Panel delay={420} id="flight-risk-table">
           <SectionHeader
             icon={<AlertTriangle size={14} />}
             title="Top Flight Risks"

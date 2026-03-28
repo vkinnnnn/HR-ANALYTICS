@@ -21,11 +21,19 @@ class ChatQuery(BaseModel):
     conversation_history: list[dict] | None = None  # Multi-turn support
 
 
+class NavigationCommand(BaseModel):
+    action: str = "navigate"
+    route: str
+    scroll_to: str | None = None
+    highlight: str | None = None
+
+
 class ChatResponse(BaseModel):
     answer: str
     data: dict | None = None
     suggestions: list[str] | None = None
     analysis_type: str | None = None
+    navigation: NavigationCommand | None = None
 
 
 # ─── Deep Context Builder ───────────────────────────────────────────
@@ -348,6 +356,22 @@ CHART FORMAT (include EXACTLY ONE when relevant):
 {{"chart_type": "bar|pie|line|area", "labels": [...], "values": [...], "title": "...", "highlight": "optional_label"}}
 ```
 
+NAVIGATION (when user asks to "show me", "take me to", "where can I see"):
+Include a navigation command line: NAVIGATE: /route#section_id
+Available pages:
+- / (Dashboard): sections: kpi-cards, insight-banner, headcount-chart, turnover-chart, tenure-chart, flight-risk-table
+- /turnover: turnover rates, trends, danger zones. sections: turnover-summary, turnover-trend, danger-zones
+- /tenure: cohorts, retention curves. sections: tenure-summary, tenure-distribution
+- /flight-risk: ML scores, features. sections: risk-table, feature-importance
+- /careers: promotion velocity, stuck employees. sections: career-summary, stuck-employees
+- /managers: span of control, retention. sections: manager-leaderboard, span-of-control
+- /org: hierarchy, dept sizes. sections: org-summary, dept-sizes
+- /insights: taxonomy results
+- /reports: executive summary, export
+- /settings: LLM config
+- /upload: CSV upload
+Example: User asks "Show me turnover" → respond with analysis AND add: NAVIGATE: /turnover#turnover-summary
+
 FOLLOW-UP SUGGESTIONS (ALWAYS include):
 End with: SUGGESTIONS: question 1 | question 2 | question 3
 
@@ -357,11 +381,24 @@ End with: SUGGESTIONS: question 1 | question 2 | question 3
 
 # ─── Response Parser ────────────────────────────────────────────────
 
-def _parse_response(raw: str) -> tuple[str, dict | None, list[str] | None]:
-    """Parse LLM response to extract text, chart_data, and suggestions."""
+def _parse_response(raw: str) -> tuple[str, dict | None, list[str] | None, dict | None]:
+    """Parse LLM response to extract text, chart_data, suggestions, and navigation."""
     answer = raw
     chart_data = None
     suggestions = None
+    navigation = None
+
+    # Extract navigation command
+    if "NAVIGATE:" in answer:
+        nav_parts = answer.split("NAVIGATE:")
+        answer = nav_parts[0].strip()
+        nav_str = nav_parts[1].strip().split("\n")[0].strip()
+        # Parse /route#section format
+        if "#" in nav_str:
+            route, section = nav_str.split("#", 1)
+            navigation = {"action": "navigate", "route": route.strip(), "scroll_to": section.strip(), "highlight": section.strip()}
+        else:
+            navigation = {"action": "navigate", "route": nav_str.strip()}
 
     # Extract suggestions
     if "SUGGESTIONS:" in answer:
@@ -381,7 +418,7 @@ def _parse_response(raw: str) -> tuple[str, dict | None, list[str] | None]:
         except (ValueError, json.JSONDecodeError):
             pass
 
-    return answer, chart_data, suggestions
+    return answer, chart_data, suggestions, navigation
 
 
 # ─── Local Fallback ─────────────────────────────────────────────────
@@ -516,9 +553,10 @@ async def chat_query(query: ChatQuery):
             max_tokens=1500,
         )
         raw_answer = response.choices[0].message.content
-        answer, chart_data, suggestions = _parse_response(raw_answer)
+        answer, chart_data, suggestions, navigation = _parse_response(raw_answer)
     except ValueError:
         answer, chart_data, suggestions = _local_chat_response(query.question)
+        navigation = _detect_navigation(query.question)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
 
@@ -527,7 +565,34 @@ async def chat_query(query: ChatQuery):
         data=chart_data,
         suggestions=suggestions,
         analysis_type=_detect_analysis_type(query.question),
+        navigation=NavigationCommand(**navigation) if navigation else None,
     )
+
+
+def _detect_navigation(question: str) -> dict | None:
+    """Detect if user wants to navigate to a page."""
+    q = question.lower()
+    nav_map = {
+        "turnover": ("/turnover", "turnover-summary"),
+        "attrition": ("/turnover", "turnover-summary"),
+        "tenure": ("/tenure", "tenure-summary"),
+        "flight risk": ("/flight-risk", "risk-table"),
+        "risk": ("/flight-risk", "risk-table"),
+        "career": ("/careers", "career-summary"),
+        "promotion": ("/careers", "career-summary"),
+        "manager": ("/managers", "manager-leaderboard"),
+        "org": ("/org", "org-summary"),
+        "structure": ("/org", "org-summary"),
+        "upload": ("/upload", None),
+        "report": ("/reports", None),
+        "setting": ("/settings", None),
+        "dashboard": ("/", "kpi-cards"),
+    }
+    if any(w in q for w in ["show me", "take me", "navigate", "go to", "where", "open"]):
+        for keyword, (route, section) in nav_map.items():
+            if keyword in q:
+                return {"action": "navigate", "route": route, "scroll_to": section, "highlight": section}
+    return None
 
 
 def _detect_analysis_type(question: str) -> str:

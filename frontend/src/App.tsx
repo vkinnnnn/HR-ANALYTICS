@@ -27,6 +27,27 @@ function AppContent() {
   const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
   const [hasNotification, setHasNotification] = useState(false);
 
+  // First-time onboarding: auto-open chat with welcome message
+  useEffect(() => {
+    const hasOnboarded = localStorage.getItem('workforceiq_onboarded');
+    if (!hasOnboarded) {
+      setTimeout(() => {
+        setChatOpen(true);
+        setHasNotification(false);
+        const welcomeMsg: ChatMessage = {
+          role: 'system',
+          content: '**Welcome to Workforce IQ!** I\'m your AI workforce analyst. I can help you understand your employee data, answer questions, and guide you around the platform.\n\nTry clicking one of the prompts below, or ask me anything about your workforce.',
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => {
+          if (prev.some(m => m.content.includes('Welcome to Workforce IQ'))) return prev;
+          return [welcomeMsg, ...prev];
+        });
+        localStorage.setItem('workforceiq_onboarded', 'true');
+      }, 2000);
+    }
+  }, []);
+
   // Proactive insights: check for anomalies after data loads
   useEffect(() => {
     async function checkAnomalies() {
