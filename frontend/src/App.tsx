@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { ToastProvider } from './components/ui/Toast';
 import { Sidebar } from './components/layout/Sidebar';
 import { AmbientBackground } from './components/layout/AmbientBackground';
 import { ChatTrigger } from './components/chat/ChatTrigger';
@@ -23,9 +24,23 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('wiq_chat');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
   const [hasNotification, setHasNotification] = useState(false);
+  const persistTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Persist chat to sessionStorage (debounced)
+  useEffect(() => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      try { sessionStorage.setItem('wiq_chat', JSON.stringify(chatMessages)); } catch {}
+    }, 500);
+  }, [chatMessages]);
 
   // First-time onboarding: auto-open chat with welcome message
   useEffect(() => {
@@ -47,6 +62,24 @@ function AppContent() {
       }, 2000);
     }
   }, []);
+
+  // Keyboard shortcut: Cmd+K / Ctrl+K to toggle chat
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setChatOpen(prev => {
+          if (!prev) setHasNotification(false);
+          return !prev;
+        });
+      }
+      if (e.key === 'Escape' && chatOpen) {
+        setChatOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [chatOpen]);
 
   // Proactive insights: check for anomalies after data loads
   useEffect(() => {
@@ -165,7 +198,9 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </BrowserRouter>
   );
 }

@@ -64,6 +64,7 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,6 +99,24 @@ export function ChatPanel({
     }
   }, [input]);
 
+  function handleNavigation(nav: any) {
+    if (nav && onNavigate && nav.action === 'navigate' && nav.route) {
+      onNavigate(nav.route);
+      setTimeout(() => {
+        if (nav.scroll_to) {
+          document.getElementById(nav.scroll_to)?.scrollIntoView({ behavior: 'smooth' });
+        }
+        if (nav.highlight) {
+          const el = document.getElementById(nav.highlight);
+          if (el) {
+            el.classList.add('ai-highlight-pulse');
+            setTimeout(() => el.classList.remove('ai-highlight-pulse'), 3000);
+          }
+        }
+      }, 500);
+    }
+  }
+
   async function sendMessage(text: string) {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
@@ -106,56 +125,109 @@ export function ChatPanel({
     onSendMessage(userMsg);
     setInput('');
     setIsLoading(true);
+    setStreamingContent(null);
 
-    // Build conversation history for multi-turn context
     const history = [...messages, userMsg]
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-6)
       .map(m => ({ role: m.role, content: m.content }));
 
-    try {
-      const res = await api.post('/api/chat/query', {
-        question: trimmed,
-        current_page: currentPage,
-        conversation_history: history,
-      });
-      const assistantMsg: ChatMessage = {
-        role: 'assistant',
-        content: res.data.answer || res.data.text || 'No response.',
-        chart_data: res.data.data || null,
-        suggestions: res.data.suggestions || null,
-        analysis_type: res.data.analysis_type || null,
-        timestamp: Date.now(),
-      };
-      onSendMessage(assistantMsg);
+    const body = JSON.stringify({
+      question: trimmed,
+      current_page: currentPage,
+      conversation_history: history,
+    });
 
-      // Handle navigation commands from AI
-      if (res.data.navigation && onNavigate) {
-        const nav = res.data.navigation;
-        if (nav.action === 'navigate' && nav.route) {
-          onNavigate(nav.route);
-          setTimeout(() => {
-            if (nav.scroll_to) {
-              document.getElementById(nav.scroll_to)?.scrollIntoView({ behavior: 'smooth' });
+    try {
+      // Try SSE streaming first
+      const baseURL = api.defaults.baseURL || '';
+      const res = await fetch(`${baseURL}/api/chat/query/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+
+      if (!res.ok || !res.body) throw new Error('Stream unavailable');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let finalMeta: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              finalMeta = data;
+            } else if (data.token) {
+              accumulated += data.token;
+              setStreamingContent(accumulated);
             }
-            if (nav.highlight) {
-              const el = document.getElementById(nav.highlight);
-              if (el) {
-                el.classList.add('ai-highlight-pulse');
-                setTimeout(() => el.classList.remove('ai-highlight-pulse'), 3000);
-              }
-            }
-          }, 500);
+          } catch { /* skip malformed lines */ }
         }
       }
-    } catch (err: any) {
-      onSendMessage({
+
+      // Finalize the message
+      const answer = accumulated || 'No response.';
+      // Strip SUGGESTIONS: and NAVIGATE: from the streamed text for clean display
+      let cleanAnswer = answer;
+      if (cleanAnswer.includes('SUGGESTIONS:')) {
+        cleanAnswer = cleanAnswer.split('SUGGESTIONS:')[0].trim();
+      }
+      if (cleanAnswer.includes('NAVIGATE:')) {
+        cleanAnswer = cleanAnswer.split('NAVIGATE:')[0].trim();
+      }
+      // Strip chart JSON blocks
+      cleanAnswer = cleanAnswer.replace(/```json[\s\S]*?```/g, '').trim();
+
+      const assistantMsg: ChatMessage = {
         role: 'assistant',
-        content: err?.response?.data?.detail || 'Sorry, I encountered an error processing your request.',
+        content: cleanAnswer,
+        chart_data: finalMeta?.chart_data || null,
+        suggestions: finalMeta?.suggestions || null,
+        analysis_type: finalMeta?.analysis_type || null,
         timestamp: Date.now(),
-      });
+      };
+      setStreamingContent(null);
+      onSendMessage(assistantMsg);
+      handleNavigation(finalMeta?.navigation);
+
+    } catch {
+      // Fallback to non-streaming endpoint
+      try {
+        const res = await api.post('/api/chat/query', {
+          question: trimmed,
+          current_page: currentPage,
+          conversation_history: history,
+        });
+        const assistantMsg: ChatMessage = {
+          role: 'assistant',
+          content: res.data.answer || res.data.text || 'No response.',
+          chart_data: res.data.data || null,
+          suggestions: res.data.suggestions || null,
+          analysis_type: res.data.analysis_type || null,
+          timestamp: Date.now(),
+        };
+        onSendMessage(assistantMsg);
+        handleNavigation(res.data.navigation);
+      } catch (err: any) {
+        onSendMessage({
+          role: 'assistant',
+          content: err?.response?.data?.detail || 'Sorry, I encountered an error processing your request.',
+          timestamp: Date.now(),
+        });
+      }
     } finally {
       setIsLoading(false);
+      setStreamingContent(null);
     }
   }
 
@@ -371,27 +443,43 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Typing indicator */}
+        {/* Streaming / Thinking indicator */}
         {isLoading && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <div className="fire-orb" style={{ width: 24, height: 24, flexShrink: 0 }} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div className="fire-orb" style={{ width: 24, height: 24, flexShrink: 0, animation: streamingContent ? 'flameShift 3s ease-in-out infinite' : 'orbThinking 2s linear infinite, flameShift 3s ease-in-out infinite' }} />
             <div style={{
               padding: '14px 18px',
               borderRadius: '16px 16px 16px 4px',
               background: 'rgba(255,255,255,0.03)',
               border: '1px solid rgba(255,255,255,0.06)',
-              display: 'flex', gap: 5,
+              maxWidth: '85%',
+              minWidth: 80,
             }}>
-              {[0, 1, 2].map(j => (
-                <span
-                  key={j}
-                  style={{
-                    width: 6, height: 6, borderRadius: '50%', background: '#52525b',
-                    display: 'inline-block',
-                    animation: `dotBounce 1.4s ${j * 150}ms infinite`,
-                  }}
+              {streamingContent ? (
+                <div
+                  style={{ fontSize: 13, lineHeight: 1.65, color: '#e4e4e7' }}
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(streamingContent) }}
                 />
-              ))}
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#FF8A4C' }}>Analyzing...</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[0.7, 0.5, 0.3].map((w, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          height: 8, borderRadius: 4,
+                          background: 'rgba(255,255,255,0.04)',
+                          width: `${w * 100}%`,
+                          animation: `shimmer 2s ${i * 200}ms infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

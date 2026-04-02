@@ -216,7 +216,7 @@ export function Dashboard({ onChartClick }: DashboardProps) {
             icon={<TrendingUp size={14} />}
             title="Headcount Trend"
             subtitle="Monthly active headcount over time"
-            action={<Badge label={`${formattedTrend.length} months`} color="#34d399" />}
+            action={<Badge label={`${formattedTrend.length} months`} color="#FF8A4C" />}
           />
           {loading ? (
             <div style={{ height: 280, background: 'rgba(255,255,255,0.03)', borderRadius: 8, animation: 'shimmer 2s infinite' }} />
@@ -225,8 +225,8 @@ export function Dashboard({ onChartClick }: DashboardProps) {
               <AreaChart data={formattedTrend}>
                 <defs>
                   <linearGradient id="hcGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#FF8A4C" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#FF8A4C" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
@@ -247,12 +247,12 @@ export function Dashboard({ onChartClick }: DashboardProps) {
                 <Area
                   type="monotone"
                   dataKey="headcount"
-                  stroke="#34d399"
+                  stroke="#FF8A4C"
                   fill="url(#hcGrad)"
                   strokeWidth={2}
                   name="Headcount"
                   dot={false}
-                  activeDot={{ r: 4, fill: '#34d399', stroke: '#131318', strokeWidth: 2 }}
+                  activeDot={{ r: 4, fill: '#FF8A4C', stroke: '#131318', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>

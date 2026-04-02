@@ -83,6 +83,56 @@ def update_llm_settings(update: LLMUpdate):
     return get_llm_settings()
 
 
+class APIKeyUpdate(BaseModel):
+    provider: str
+    api_key: str
+
+
+@router.post("/api-key")
+def update_api_key(update: APIKeyUpdate):
+    """Update an LLM provider's API key at runtime."""
+    if update.provider == "openrouter":
+        os.environ["OPENROUTER_API_KEY"] = update.api_key
+    elif update.provider == "openai":
+        os.environ["OPENAI_API_KEY"] = update.api_key
+    else:
+        return {"error": f"Unknown provider: {update.provider}"}
+
+    # Mask key for response
+    masked = "..." + update.api_key[-4:] if len(update.api_key) > 4 else "****"
+    return {"status": "saved", "provider": update.provider, "masked_key": masked}
+
+
+@router.post("/test-connection")
+async def test_connection():
+    """Test the current LLM connection with a minimal call."""
+    import time
+    from ..llm import _get_client_and_model
+
+    client, model = _get_client_and_model()
+    if client is None:
+        return {"success": False, "error": "No API key configured", "latency_ms": 0, "model": ""}
+
+    start = time.time()
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "Say hello in 3 words."}],
+            max_tokens=10,
+            temperature=0,
+        )
+        latency = int((time.time() - start) * 1000)
+        return {
+            "success": True,
+            "latency_ms": latency,
+            "model": model,
+            "response": response.choices[0].message.content[:50],
+        }
+    except Exception as e:
+        latency = int((time.time() - start) * 1000)
+        return {"success": False, "error": str(e)[:200], "latency_ms": latency, "model": model}
+
+
 @router.get("/platform")
 def get_platform_settings():
     """Get overall platform configuration status."""

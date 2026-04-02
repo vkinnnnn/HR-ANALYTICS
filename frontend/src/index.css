@@ -257,3 +257,9 @@
   animation: aiHighlightPulse 0.8s ease-out 3;
   border-radius: 16px;
 }
+
+@keyframes orbThinking {
+  0% { box-shadow: 0 0 12px rgba(255,138,76,0.3), 0 0 24px rgba(255,138,76,0.15); }
+  50% { box-shadow: 0 0 20px rgba(255,138,76,0.6), 0 0 40px rgba(255,138,76,0.25); }
+  100% { box-shadow: 0 0 12px rgba(255,138,76,0.3), 0 0 24px rgba(255,138,76,0.15); }
+}

@@ -74,9 +74,7 @@ export function Sidebar() {
       }}
     >
       <div className="flex items-center gap-2.5 px-4 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="w-8 h-8 rounded-[8px] flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FF8A4C, #e85d04)' }}>
-          <Activity size={16} color="#fff" />
-        </div>
+        <div className="fire-orb" style={{ width: 32, height: 32, flexShrink: 0 }} />
         {!collapsed && <span style={{ fontSize: 14, fontWeight: 700, color: '#fafafa', letterSpacing: '-0.01em' }}>Workforce IQ</span>}
       </div>
 

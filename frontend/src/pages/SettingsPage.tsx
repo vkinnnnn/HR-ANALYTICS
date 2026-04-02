@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, Database, ShieldAlert, FolderOpen, Zap, AlertTriangle,
-  Check, Loader2, RefreshCw, User, Building,
+  Check, Loader2, RefreshCw, User, Building, Eye, EyeOff, Wifi,
 } from 'lucide-react';
 import { PageHero } from '../components/ui/PageHero';
 import { Panel } from '../components/ui/Panel';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Badge } from '../components/ui/Badge';
+import { useToast } from '../components/ui/Toast';
 import api from '../lib/api';
 
 interface LLMConfig {
@@ -27,6 +28,12 @@ export function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; latency_ms: number; error?: string } | null>(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     loadSettings();
@@ -162,6 +169,94 @@ export function SettingsPage() {
                       </div>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* API Key Input */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: 8 }}>
+                  {selectedProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI'} API Key
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input
+                      type={showKey ? 'text' : 'password'}
+                      value={apiKeyInput}
+                      onChange={e => { setApiKeyInput(e.target.value); setTestResult(null); }}
+                      placeholder={
+                        (selectedProvider === 'openrouter' ? llmConfig?.has_openrouter_key : llmConfig?.has_openai_key)
+                          ? '••••••••••••  (key already set — enter new to replace)'
+                          : selectedProvider === 'openrouter' ? 'sk-or-v1-...' : 'sk-proj-...'
+                      }
+                      style={{
+                        width: '100%', padding: '10px 40px 10px 14px', borderRadius: 10,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.09)',
+                        color: '#fafafa', fontSize: 12, fontFamily: 'monospace',
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={() => setShowKey(p => !p)}
+                      style={{
+                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer', color: '#52525b', padding: 2,
+                      }}
+                    >
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!apiKeyInput.trim()) return;
+                      setSavingKey(true);
+                      try {
+                        await api.post('/api/settings/api-key', { provider: selectedProvider, api_key: apiKeyInput.trim() });
+                        addToast('API key saved', 'success');
+                        setApiKeyInput('');
+                        loadSettings();
+                      } catch { addToast('Failed to save key', 'error'); }
+                      finally { setSavingKey(false); }
+                    }}
+                    disabled={!apiKeyInput.trim() || savingKey}
+                    style={{
+                      padding: '10px 16px', borderRadius: 10, whiteSpace: 'nowrap',
+                      background: apiKeyInput.trim() ? 'rgba(255,138,76,0.12)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${apiKeyInput.trim() ? 'rgba(255,138,76,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                      color: apiKeyInput.trim() ? '#FF8A4C' : '#52525b',
+                      fontSize: 12, fontWeight: 600, cursor: apiKeyInput.trim() ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    {savingKey ? <Loader2 size={14} className="animate-spin" /> : 'Save Key'}
+                  </button>
+                </div>
+                {/* Test Connection */}
+                <div className="flex items-center gap-3 mt-3">
+                  <button
+                    onClick={async () => {
+                      setTesting(true); setTestResult(null);
+                      try {
+                        const res = await api.post('/api/settings/test-connection');
+                        setTestResult(res.data);
+                        addToast(res.data.success ? `Connected — ${res.data.latency_ms}ms` : `Connection failed`, res.data.success ? 'success' : 'error');
+                      } catch { setTestResult({ success: false, latency_ms: 0, error: 'Request failed' }); addToast('Connection test failed', 'error'); }
+                      finally { setTesting(false); }
+                    }}
+                    disabled={testing}
+                    style={{
+                      padding: '8px 14px', borderRadius: 9999, display: 'flex', alignItems: 'center', gap: 6,
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                      color: '#a1a1aa', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    {testing ? <Loader2 size={12} className="animate-spin" /> : <Wifi size={12} />}
+                    Test Connection
+                  </button>
+                  {testResult && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: testResult.success ? '#34d399' : '#fb7185' }}>
+                      {testResult.success ? `Connected · ${testResult.latency_ms}ms` : testResult.error}
+                    </span>
+                  )}
                 </div>
               </div>
 

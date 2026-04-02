@@ -573,6 +573,95 @@ async def chat_query(query: ChatQuery):
     )
 
 
+# ─── Streaming Endpoint (SSE) ──────────────────────────────────────
+
+@router.post("/query/stream")
+async def chat_query_stream(query: ChatQuery):
+    """Stream workforce analytics answers token-by-token via SSE."""
+    from fastapi.responses import StreamingResponse
+    import logging
+
+    if not is_loaded():
+        raise HTTPException(status_code=503, detail="Data not loaded. Upload data first.")
+
+    if not query.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    context = _build_deep_context(query.current_page, query.filters)
+
+    page_hint = ""
+    if query.current_page:
+        page_map = {
+            "/": "dashboard overview",
+            "/turnover": "turnover & attrition analysis",
+            "/tenure": "tenure analysis",
+            "/careers": "career progression",
+            "/managers": "manager analytics",
+            "/org": "organizational structure",
+            "/flight-risk": "flight risk predictions",
+            "/workforce": "workforce composition",
+        }
+        page_label = page_map.get(query.current_page, query.current_page)
+        page_hint = f"\nThe user is currently viewing the {page_label} page. Tailor your answer to that context."
+    if query.filters:
+        page_hint += f"\nActive filters: {query.filters}"
+
+    system = SYSTEM_PROMPT.format(context=context) + page_hint
+
+    messages = [{"role": "system", "content": system}]
+    if query.conversation_history:
+        for msg in query.conversation_history[-6:]:
+            if msg.get("role") in ("user", "assistant") and msg.get("content"):
+                messages.append({"role": msg["role"], "content": msg["content"]})
+
+    user_msg = query.question.strip()
+    user_msg += (
+        "\n\nIf this question would benefit from a chart, include EXACTLY ONE JSON block in this format:\n"
+        '```json\n{"chart_type": "bar|pie|line|area", "labels": [...], "values": [...], "title": "...", "highlight": "optional_label"}\n```\n'
+        "At the end, add: SUGGESTIONS: follow-up question 1 | follow-up question 2 | follow-up question 3"
+    )
+    messages.append({"role": "user", "content": user_msg})
+
+    async def event_generator():
+        try:
+            from ..llm import _get_client_and_model
+            client, model = _get_client_and_model()
+            if client is None:
+                raise ValueError("No LLM key")
+
+            stream = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                stream=True,
+            )
+
+            full_response = ""
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    full_response += delta.content
+                    yield f"data: {json.dumps({'token': delta.content})}\n\n"
+
+            # Parse the full response for structured data
+            answer, chart_data, suggestions, navigation = _parse_response(full_response)
+            if not navigation:
+                navigation = _detect_navigation(query.question)
+
+            yield f"data: {json.dumps({'done': True, 'suggestions': suggestions, 'chart_data': chart_data, 'navigation': navigation, 'analysis_type': _detect_analysis_type(query.question)})}\n\n"
+
+        except Exception as e:
+            logging.warning(f"LLM streaming failed, using local fallback: {e}")
+            answer, chart_data, suggestions = _local_chat_response(query.question)
+            navigation = _detect_navigation(query.question)
+            # Send full response as single event
+            yield f"data: {json.dumps({'token': answer})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'suggestions': suggestions, 'chart_data': chart_data, 'navigation': navigation, 'analysis_type': _detect_analysis_type(query.question)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 def _detect_navigation(question: str) -> dict | None:
     """Detect if user wants to navigate to a page."""
     q = question.lower()
