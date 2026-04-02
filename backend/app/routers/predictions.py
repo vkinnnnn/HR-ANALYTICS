@@ -70,6 +70,41 @@ def _ensure_model() -> dict:
     return _model_cache
 
 
+def compute_flight_risk_sync(top_n: int = 10) -> list[dict] | None:
+    """Sync helper for computing flight risk — used by chat context builder."""
+    try:
+        if not is_loaded():
+            return None
+        cache = _ensure_model()
+        model: LogisticRegression = cache["model"]
+        scaler: StandardScaler = cache["scaler"]
+
+        df = get_employees()
+        active = df[df["is_active"]].copy()
+        if active.empty:
+            return None
+
+        features = active[FEATURE_COLS].fillna(0).values
+        X_scaled = scaler.transform(features)
+        risk_proba = model.predict_proba(X_scaled)
+        departed_idx = list(model.classes_).index(1)
+        active["risk_score"] = risk_proba[:, departed_idx]
+        top = active.nlargest(top_n, "risk_score")
+
+        return [
+            {
+                "job_title": str(row.get("job_title", "")),
+                "department": str(row.get("department_name", "")),
+                "risk_score": float(row["risk_score"]),
+                "tenure_years": float(row.get("tenure_years", 0)),
+                "time_in_current_role_days": int(row.get("time_in_current_role_days", 0)),
+            }
+            for _, row in top.iterrows()
+        ]
+    except Exception:
+        return None
+
+
 @router.get("/flight-risk")
 async def get_flight_risk(top_n: int = Query(default=20, ge=1, le=500)):
     """Score active employees for flight risk and return top N highest risk."""

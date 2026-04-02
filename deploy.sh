@@ -29,6 +29,18 @@ echo ""
 
 cd backend
 
+# Read LLM keys from local .env file (these must NOT be committed to git)
+if [ -f .env ]; then
+  export $(grep -E '^(LLM_PROVIDER|OPENROUTER_API_KEY|OPENROUTER_MODEL|OPENAI_API_KEY|OPENAI_MODEL)=' .env | xargs)
+fi
+
+if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+  echo "⚠ WARNING: No LLM API keys found in backend/.env"
+  echo "  AI features (chat, reports) will use generic local fallback."
+  echo "  Set OPENROUTER_API_KEY or OPENAI_API_KEY in backend/.env to enable AI."
+  echo ""
+fi
+
 # Build and deploy in one command (uses Cloud Build)
 gcloud run deploy $BACKEND_SERVICE \
   --source . \
@@ -36,7 +48,7 @@ gcloud run deploy $BACKEND_SERVICE \
   --region $REGION \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars "^;;^CORS_ORIGINS=https://${PROJECT_ID}.web.app,https://${PROJECT_ID}.firebaseapp.com;;DATABASE_URL=sqlite+aiosqlite:///./hr_platform.db;;DATA_DIR=/app/wh_Dataset" \
+  --set-env-vars "^;;^CORS_ORIGINS=https://${PROJECT_ID}.web.app,https://${PROJECT_ID}.firebaseapp.com;;DATABASE_URL=sqlite+aiosqlite:///./hr_platform.db;;DATA_DIR=/app/wh_Dataset;;LLM_PROVIDER=${LLM_PROVIDER:-openrouter};;OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-};;OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3-super-120b-a12b:free};;OPENAI_API_KEY=${OPENAI_API_KEY:-};;OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}" \
   --memory 1Gi \
   --cpu 1 \
   --min-instances 0 \

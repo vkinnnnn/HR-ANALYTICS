@@ -8,7 +8,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..data_loader import get_employees, get_history, get_manager_span, is_loaded
+from ..data_loader import get_employees, get_history, get_manager_span, get_current_managers, is_loaded
 from ..llm import llm_call as _llm_call_raw
 
 router = APIRouter()
@@ -90,8 +90,8 @@ Departments: {df['department_name'].nunique()} | Countries: {df['country'].nuniq
 
     # ── Flight risk data ──
     try:
-        from ..routers.predictions import _compute_flight_risk
-        risk_data = _compute_flight_risk(top_n=10)
+        from ..routers.predictions import compute_flight_risk_sync
+        risk_data = compute_flight_risk_sync(top_n=10)
         if risk_data:
             risk_lines = []
             for emp in risk_data[:10]:
@@ -557,11 +557,12 @@ async def chat_query(query: ChatQuery):
         # If LLM didn't include navigation but user clearly wants to navigate, add it
         if not navigation:
             navigation = _detect_navigation(query.question)
-    except ValueError:
+    except Exception as e:
+        # Any LLM failure (missing key, network, timeout, API error) → graceful local fallback
+        import logging
+        logging.warning(f"LLM call failed, using local fallback: {e}")
         answer, chart_data, suggestions = _local_chat_response(query.question)
         navigation = _detect_navigation(query.question)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
 
     return ChatResponse(
         answer=answer,

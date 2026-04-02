@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from ..data_loader import get_employees, get_history, is_loaded
+from ..data_loader import get_employees, get_history, get_manager_span, is_loaded
 from ..llm import llm_call_premium as _llm_call_premium, is_llm_available
 
 router = APIRouter()
@@ -356,6 +356,8 @@ async def generate_structured_report():
     if not is_loaded():
         raise HTTPException(status_code=503, detail="Data not loaded.")
 
+    import pandas as pd
+
     df = get_employees()
     active = df[df["is_active"]]
     departed = df[~df["is_active"]]
@@ -365,6 +367,8 @@ async def generate_structured_report():
     turnover = round(departed_count / total * 100, 1) if total > 0 else 0
     avg_tenure = round(float(df["tenure_years"].mean()), 1)
     median_tenure = round(float(df["tenure_years"].median()), 1)
+    active_avg_tenure = round(float(active["tenure_years"].mean()), 1)
+    departed_avg_tenure = round(float(departed["tenure_years"].mean()), 1) if departed_count > 0 else 0
 
     # Department stats
     dept_stats = df.groupby("department_name").agg(
@@ -379,11 +383,23 @@ async def generate_structured_report():
     # Build sections
     sections = []
 
-    # Section 1: Workforce Composition
+    # ── Section 1: Workforce Composition ──
     dept_chart = dept_stats.head(10)
+    top_2_depts = dept_stats.head(2)
+    top_dept_names = [f"{d} ({int(r['active'])})" for d, r in top_2_depts.iterrows()]
+    composition_insights = []
+    if "country" in df.columns:
+        top_country = active["country"].value_counts().head(1)
+        if len(top_country) > 0:
+            pct = round(top_country.iloc[0] / active_count * 100, 1)
+            composition_insights.append(f"{pct}% of active employees are in {top_country.index[0]} — geographic concentration risk")
+    small_depts = dept_stats[dept_stats["active"] <= 3]
+    if len(small_depts) > 3:
+        composition_insights.append(f"{len(small_depts)} departments have 3 or fewer active employees — potential restructuring candidates")
+
     sections.append({
         "title": "Workforce Composition",
-        "narrative": f"The organization has {active_count:,} active employees across {df['department_name'].nunique()} departments. Technology ({int(dept_stats.loc['Technology','active']) if 'Technology' in dept_stats.index else '?'}) and Operations ({int(dept_stats.loc['Operations','active']) if 'Operations' in dept_stats.index else '?'}) are the largest departments.",
+        "narrative": f"The organization has {active_count:,} active employees across {df['department_name'].nunique()} departments and {df['country'].nunique() if 'country' in df.columns else 'N/A'} countries. The largest departments are {' and '.join(top_dept_names)}. The active-to-total ratio is {round(active_count/total*100,1)}%, meaning {round(departed_count/total*100,1)}% of all recorded employees have departed.",
         "chart": {
             "type": "bar",
             "data": [{"name": str(d), "value": int(r["active"])} for d, r in dept_chart.iterrows()],
@@ -392,44 +408,58 @@ async def generate_structured_report():
             {"label": "Active Headcount", "value": f"{active_count:,}"},
             {"label": "Departments", "value": str(df["department_name"].nunique())},
             {"label": "Countries", "value": str(df["country"].nunique()) if "country" in df.columns else "N/A"},
+            {"label": "Business Units", "value": str(df["business_unit_name"].nunique())},
         ],
-        "insights": [],
+        "insights": composition_insights,
     })
 
-    # Section 2: Turnover & Attrition
+    # ── Section 2: Turnover & Attrition ──
     worst_depts = dept_stats.sort_values("turnover_pct", ascending=False).head(8)
+    best_depts = dept_stats[dept_stats["total"] >= 10].sort_values("turnover_pct").head(3)
     turnover_insights = []
     full_churn = dept_stats[dept_stats["turnover_pct"] >= 100]
     if len(full_churn) > 0:
-        turnover_insights.append(f"{len(full_churn)} departments have 100% turnover")
+        turnover_insights.append(f"{len(full_churn)} departments have 100% turnover — complete team loss: {', '.join(str(d) for d in full_churn.index[:3])}")
     early_dep = departed[departed["tenure_years"] < 1]
-    if len(early_dep) > 0:
-        turnover_insights.append(f"{len(early_dep)} employees departed within their first year ({round(len(early_dep)/departed_count*100,1)}% of all departures)")
+    if departed_count > 0 and len(early_dep) > 0:
+        turnover_insights.append(f"{len(early_dep)} employees ({round(len(early_dep)/departed_count*100,1)}%) departed within their first year — onboarding effectiveness concern")
+    above_benchmark = dept_stats[dept_stats["turnover_pct"] > 20]
+    if len(above_benchmark) > 0:
+        turnover_insights.append(f"{len(above_benchmark)} of {len(dept_stats)} departments exceed the 20% industry benchmark")
 
+    benchmark_note = "above" if turnover > 20 else "within"
     sections.append({
         "title": "Turnover & Attrition",
-        "narrative": f"Overall turnover is {turnover}%, significantly above the industry benchmark of 15-20%. The company has lost {departed_count:,} employees.",
+        "narrative": f"Overall turnover is {turnover}%, {benchmark_note} the industry benchmark of 15-20% (BLS). The organization has lost {departed_count:,} employees with an average tenure at departure of {departed_avg_tenure}yr. The lowest-turnover departments (10+ employees) are {', '.join(str(d) for d in best_depts.index[:3])} — study their retention practices.",
         "chart": {
             "type": "horizontal_bar",
             "data": [{"name": str(d), "value": float(r["turnover_pct"])} for d, r in worst_depts.iterrows()],
         },
         "key_metrics": [
-            {"label": "Turnover Rate", "value": f"{turnover}%", "change": "Above benchmark"},
+            {"label": "Turnover Rate", "value": f"{turnover}%", "change": f"Benchmark: 15-20%"},
             {"label": "Total Departed", "value": f"{departed_count:,}"},
-            {"label": "Avg Tenure at Exit", "value": f"{round(float(departed['tenure_years'].mean()),1)}yr" if len(departed) > 0 else "N/A"},
+            {"label": "Avg Tenure at Exit", "value": f"{departed_avg_tenure}yr" if departed_count > 0 else "N/A"},
+            {"label": "First-Year Exits", "value": f"{len(early_dep):,}"},
         ],
         "insights": turnover_insights,
     })
 
-    # Section 3: Tenure Analysis
-    import pandas as pd
+    # ── Section 3: Tenure Analysis ──
     tenure_bins = [0, 0.5, 1, 2, 3, 5, 10, float("inf")]
     tenure_labels = ["0-6mo", "6-12mo", "1-2yr", "2-3yr", "3-5yr", "5-10yr", "10yr+"]
     tenure_dist = pd.cut(df["tenure_years"], bins=tenure_bins, labels=tenure_labels, right=False).value_counts().reindex(tenure_labels)
+    under_1yr = int(tenure_dist.get("0-6mo", 0)) + int(tenure_dist.get("6-12mo", 0))
+    long_tenured = int((active["tenure_years"] >= 10).sum())
+
+    tenure_insights = []
+    if under_1yr > total * 0.15:
+        tenure_insights.append(f"{under_1yr} employees ({round(under_1yr/total*100,1)}%) have under 1 year tenure — high early-attrition risk cohort")
+    if long_tenured > 0:
+        tenure_insights.append(f"{long_tenured} employees with 10+ years — institutional knowledge holders requiring succession plans")
 
     sections.append({
         "title": "Tenure Analysis",
-        "narrative": f"Average tenure is {avg_tenure} years (median: {median_tenure} years). The distribution shows {int(tenure_dist.get('0-6mo',0)) + int(tenure_dist.get('6-12mo',0))} employees with less than 1 year tenure — an early attrition risk group.",
+        "narrative": f"Average tenure is {avg_tenure} years (median: {median_tenure} years). Active employees average {active_avg_tenure}yr while departed employees averaged {departed_avg_tenure}yr at exit. The BLS industry average is 4.1 years — this organization is {'above' if avg_tenure > 4.1 else 'below'} benchmark.",
         "chart": {
             "type": "bar",
             "data": [{"name": label, "value": int(count)} for label, count in tenure_dist.items()],
@@ -437,46 +467,176 @@ async def generate_structured_report():
         "key_metrics": [
             {"label": "Avg Tenure", "value": f"{avg_tenure}yr"},
             {"label": "Median Tenure", "value": f"{median_tenure}yr"},
-            {"label": "10yr+ Employees", "value": str(int((active["tenure_years"] >= 10).sum()))},
+            {"label": "Active Avg", "value": f"{active_avg_tenure}yr"},
+            {"label": "10yr+ Employees", "value": str(long_tenured)},
         ],
-        "insights": [],
+        "insights": tenure_insights,
     })
 
-    # Section 4: Career Mobility
+    # ── Section 4: Career Mobility ──
     avg_role_changes = round(float(active["num_role_changes"].mean()), 1)
+    avg_manager_changes = round(float(active["num_manager_changes"].mean()), 1)
+    avg_time_in_role = int(active["time_in_current_role_days"].mean())
     stuck_3yr = int((active["time_in_current_role_days"] > 1095).sum())
+    stuck_5yr = int((active["time_in_current_role_days"] > 1825).sum())
+
+    mobility_insights = []
+    if stuck_3yr > active_count * 0.1:
+        mobility_insights.append(f"{stuck_3yr} employees ({round(stuck_3yr/active_count*100,1)}%) stuck in same role 3+ years — career development intervention needed")
+    if stuck_5yr > 0:
+        mobility_insights.append(f"{stuck_5yr} employees in same role for 5+ years — high flight risk due to stagnation")
+    # Correlation: manager changes → departures
+    if "num_manager_changes" in df.columns:
+        high_mgr_chg = df[df["num_manager_changes"] >= 3]
+        if len(high_mgr_chg) > 0:
+            high_dep = round((~high_mgr_chg["is_active"]).mean() * 100, 1)
+            low_dep = round((~df[df["num_manager_changes"] < 3]["is_active"]).mean() * 100, 1)
+            if high_dep > low_dep * 1.2:
+                mobility_insights.append(f"Employees with 3+ manager changes have {high_dep}% departure rate vs {low_dep}% for others — manager stability matters")
+
     sections.append({
         "title": "Career Mobility",
-        "narrative": f"Active employees average {avg_role_changes} role changes. {stuck_3yr} employees ({round(stuck_3yr/active_count*100,1)}%) have been in the same role for 3+ years, suggesting potential stagnation.",
+        "narrative": f"Active employees average {avg_role_changes} role changes and {avg_manager_changes} manager changes. Average time in current role is {avg_time_in_role} days ({round(avg_time_in_role/365,1)} years). {stuck_3yr} employees ({round(stuck_3yr/active_count*100,1)}%) have been in the same role for 3+ years.",
         "chart": None,
         "key_metrics": [
             {"label": "Avg Role Changes", "value": str(avg_role_changes)},
+            {"label": "Avg Manager Changes", "value": str(avg_manager_changes)},
             {"label": "Stuck 3yr+", "value": str(stuck_3yr)},
-            {"label": "Avg Time in Role", "value": f"{int(active['time_in_current_role_days'].mean())} days"},
+            {"label": "Avg Time in Role", "value": f"{round(avg_time_in_role/365,1)}yr"},
         ],
-        "insights": [f"{stuck_3yr} employees may need career development attention"] if stuck_3yr > 20 else [],
+        "insights": mobility_insights,
     })
 
-    # Recommendations
+    # ── Section 5: Manager Effectiveness ──
+    try:
+        span = get_manager_span()
+        total_managers = len(span)
+        avg_span = round(float(span["direct_reports"].mean()), 1)
+        max_span = int(span["direct_reports"].max())
+        overhead = int((span["direct_reports"] == 1).sum())
+        overloaded = int((span["direct_reports"] >= 10).sum())
+        healthy_span = int(((span["direct_reports"] >= 5) & (span["direct_reports"] <= 8)).sum())
+
+        mgr_insights = []
+        if overhead > total_managers * 0.2:
+            mgr_insights.append(f"{overhead} managers ({round(overhead/total_managers*100,1)}%) have only 1 report — potential organizational overhead")
+        if overloaded > 0:
+            mgr_insights.append(f"{overloaded} managers have 10+ direct reports — risk of burnout and reduced engagement")
+        if avg_span < 5:
+            mgr_insights.append(f"Average span of {avg_span} is below the healthy range (5-8) — organization may be over-layered")
+
+        span_dist = [
+            {"name": "1 report", "value": int((span["direct_reports"] == 1).sum())},
+            {"name": "2-4", "value": int(((span["direct_reports"] >= 2) & (span["direct_reports"] <= 4)).sum())},
+            {"name": "5-8", "value": healthy_span},
+            {"name": "9-12", "value": int(((span["direct_reports"] >= 9) & (span["direct_reports"] <= 12)).sum())},
+            {"name": "13+", "value": int((span["direct_reports"] >= 13).sum())},
+        ]
+
+        sections.append({
+            "title": "Manager Effectiveness",
+            "narrative": f"The organization has {total_managers} managers with an average span of control of {avg_span} direct reports (healthy range: 5-8). {healthy_span} managers ({round(healthy_span/total_managers*100,1)}%) fall within the ideal span. Maximum span is {max_span} reports.",
+            "chart": {
+                "type": "bar",
+                "data": span_dist,
+            },
+            "key_metrics": [
+                {"label": "Total Managers", "value": str(total_managers)},
+                {"label": "Avg Span", "value": str(avg_span), "change": "Benchmark: 5-8"},
+                {"label": "Overhead (1 report)", "value": str(overhead)},
+                {"label": "Overloaded (10+)", "value": str(overloaded)},
+            ],
+            "insights": mgr_insights,
+        })
+    except Exception:
+        pass
+
+    # ── Section 6: Flight Risk Overview ──
+    try:
+        from .predictions import compute_flight_risk_sync
+        risk_data = compute_flight_risk_sync(top_n=10)
+        if risk_data:
+            risk_insights = []
+            high_risk = [r for r in risk_data if r["risk_score"] >= 0.7]
+            if high_risk:
+                risk_depts = list(set(r["department"] for r in high_risk))
+                risk_insights.append(f"{len(high_risk)} employees in critical flight risk zone (70%+) across {', '.join(risk_depts[:3])}")
+
+            sections.append({
+                "title": "Flight Risk Analysis",
+                "narrative": f"ML-based flight risk scoring identifies the top 10 employees most likely to depart based on tenure, time in role, manager changes, and title stagnation. {len(high_risk)} employees score above 70% risk.",
+                "chart": {
+                    "type": "horizontal_bar",
+                    "data": [{"name": f"{r['department'][:15]} ({r['job_title'][:20]})", "value": round(r["risk_score"] * 100, 1)} for r in risk_data[:8]],
+                },
+                "key_metrics": [
+                    {"label": "High Risk (70%+)", "value": str(len(high_risk))},
+                    {"label": "Top Risk Score", "value": f"{round(risk_data[0]['risk_score']*100,1)}%"},
+                    {"label": "Avg Risk (Top 10)", "value": f"{round(sum(r['risk_score'] for r in risk_data)/len(risk_data)*100,1)}%"},
+                ],
+                "insights": risk_insights,
+            })
+    except Exception:
+        pass
+
+    # ── Recommendations (data-driven, prioritized) ──
     recommendations = []
     if len(full_churn) > 0:
-        recommendations.append({"priority": "critical", "title": f"Investigate {len(full_churn)} departments with 100% turnover", "detail": f"Departments: {', '.join(str(d) for d in full_churn.index[:3])}"})
-    if len(early_dep) > len(departed) * 0.3:
-        recommendations.append({"priority": "critical", "title": "Strengthen onboarding program", "detail": f"{round(len(early_dep)/departed_count*100,1)}% of departures happen within the first year"})
+        recommendations.append({"priority": "critical", "title": f"Investigate {len(full_churn)} departments with 100% turnover", "detail": f"Departments: {', '.join(str(d) for d in full_churn.index[:3])}. Conduct exit interview analysis and compare to peer departments."})
+    if departed_count > 0 and len(early_dep) > departed_count * 0.3:
+        recommendations.append({"priority": "critical", "title": "Redesign onboarding program", "detail": f"{round(len(early_dep)/departed_count*100,1)}% of departures happen within the first year. Implement 30-60-90 day check-ins and buddy system."})
     if stuck_3yr > active_count * 0.1:
-        recommendations.append({"priority": "high", "title": "Career development for stagnant employees", "detail": f"{stuck_3yr} employees stuck in same role for 3+ years"})
-    recommendations.append({"priority": "medium", "title": "Manager effectiveness review", "detail": "Correlate manager retention rates with team turnover to identify coaching opportunities"})
+        recommendations.append({"priority": "high", "title": "Launch career development initiative", "detail": f"{stuck_3yr} employees stuck in same role 3+ years. Create individual development plans and cross-functional rotation opportunities."})
+    if turnover > 20:
+        recommendations.append({"priority": "high", "title": "Conduct stay interviews in high-turnover departments", "detail": f"Overall turnover at {turnover}% exceeds the 20% benchmark. Focus on departments above 50% turnover."})
+    try:
+        span = get_manager_span()
+        overhead = int((span["direct_reports"] == 1).sum())
+        if overhead > len(span) * 0.2:
+            recommendations.append({"priority": "medium", "title": "Review manager overhead", "detail": f"{overhead} managers have only 1 direct report — consider consolidating reporting lines to reduce management overhead."})
+    except Exception:
+        pass
+    if long_tenured > 20:
+        recommendations.append({"priority": "medium", "title": "Succession planning for institutional knowledge", "detail": f"{long_tenured} employees with 10+ years tenure. Identify critical knowledge holders and create documentation/mentoring programs."})
+    recommendations.append({"priority": "medium", "title": "Manager effectiveness review", "detail": "Correlate manager retention rates with team turnover to identify coaching opportunities and best practices."})
 
-    # LLM executive summary
+    # ── LLM executive summary (rich prompt) ──
     exec_summary = ""
     try:
         context = _build_report_context()
         exec_summary = await _llm_call(
-            "Write a 3-paragraph executive summary of this workforce data for a CHRO. Be concise and data-driven.",
+            "You are a senior People Analytics consultant writing an executive intelligence briefing for the CHRO. "
+            "Write a compelling 3-paragraph executive summary that:\n"
+            "- Paragraph 1: State the organization's workforce health — headline KPIs compared to industry benchmarks "
+            "(turnover benchmark: 15-20%, avg tenure benchmark: 4.1yr per BLS, healthy span: 5-8)\n"
+            "- Paragraph 2: Identify the top 2-3 risk areas with specific numbers and root cause analysis. "
+            "Don't just report symptoms — explain WHY (e.g., 'high turnover in X may be driven by Y')\n"
+            "- Paragraph 3: Recommend 3 prioritized actions with expected impact\n\n"
+            "Be data-specific (use exact numbers), concise, and write for a C-suite audience. "
+            "Avoid generic platitudes — every sentence should contain a specific data point or insight.",
             context
         )
     except Exception:
-        exec_summary = f"The organization has {active_count:,} active employees with a {turnover}% overall turnover rate. Average tenure is {avg_tenure} years."
+        # Rich local fallback
+        worst_dept = dept_stats.sort_values("turnover_pct", ascending=False).head(1)
+        worst_dept_name = worst_dept.index[0] if len(worst_dept) > 0 else "Unknown"
+        worst_dept_pct = float(worst_dept.iloc[0]["turnover_pct"]) if len(worst_dept) > 0 else 0
+
+        exec_summary = (
+            f"The organization has {active_count:,} active employees out of {total:,} total, "
+            f"with an overall turnover rate of {turnover}% — "
+            f"{'significantly above' if turnover > 20 else 'within'} the industry benchmark of 15-20%. "
+            f"Average tenure is {avg_tenure} years (median: {median_tenure}yr), "
+            f"{'above' if avg_tenure > 4.1 else 'below'} the BLS national average of 4.1 years.\n\n"
+            f"Key risk areas: {worst_dept_name} leads with {worst_dept_pct}% turnover. "
+            f"{len(early_dep)} employees ({round(len(early_dep)/max(departed_count,1)*100,1)}% of all departures) "
+            f"left within their first year, pointing to onboarding gaps. "
+            f"{stuck_3yr} active employees ({round(stuck_3yr/max(active_count,1)*100,1)}%) have been "
+            f"in the same role for 3+ years, creating a stagnation-driven flight risk.\n\n"
+            f"Priority actions: (1) Investigate high-turnover departments with targeted stay interviews, "
+            f"(2) Redesign the first-year experience with 30-60-90 day check-ins, "
+            f"(3) Launch career development programs for the {stuck_3yr} employees in stagnant roles."
+        )
 
     return {
         "title": "Workforce Intelligence Report",
