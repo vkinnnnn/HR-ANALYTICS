@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, TrendingDown, Clock, AlertTriangle,
-  GitBranch, UserCheck, Building2, Sparkles,
-  Upload, FileText, Settings, ChevronLeft, ChevronRight, Activity,
-  User, LogOut, HelpCircle,
+  LayoutDashboard, Search, TreePine, Scale, MessageSquareText,
+  ArrowRightLeft, Network, Trophy, ShieldCheck,
+  Users, TrendingDown, Briefcase, UserCog,
+  Sparkles, FileText, Activity, Upload, Settings,
+  ChevronLeft, ChevronRight, User, LogOut, HelpCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -14,41 +15,52 @@ const NAV_GROUPS = [
     color: '#FF8A4C',
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/workforce', icon: Users, label: 'Workforce' },
+      { to: '/explorer', icon: Search, label: 'Recognition Explorer' },
     ],
   },
   {
-    label: 'Retention',
-    color: '#fb7185',
+    label: 'Analytics',
+    color: '#a78bfa',
     items: [
-      { to: '/turnover', icon: TrendingDown, label: 'Turnover' },
-      { to: '/tenure', icon: Clock, label: 'Tenure' },
-      { to: '/flight-risk', icon: AlertTriangle, label: 'Flight Risk' },
+      { to: '/categories', icon: TreePine, label: 'Categories' },
+      { to: '/inequality', icon: Scale, label: 'Inequality' },
+      { to: '/quality', icon: MessageSquareText, label: 'Message Quality' },
+    ],
+  },
+  {
+    label: 'Network',
+    color: '#60a5fa',
+    items: [
+      { to: '/flow', icon: ArrowRightLeft, label: 'Recognition Flow' },
+      { to: '/network', icon: Network, label: 'Social Graph' },
     ],
   },
   {
     label: 'People',
     color: '#34d399',
     items: [
-      { to: '/careers', icon: GitBranch, label: 'Careers' },
-      { to: '/managers', icon: UserCheck, label: 'Managers' },
-      { to: '/org', icon: Building2, label: 'Org Structure' },
+      { to: '/nominators', icon: Trophy, label: 'Nominators' },
+      { to: '/fairness', icon: ShieldCheck, label: 'Fairness Audit' },
+    ],
+  },
+  {
+    label: 'Workforce',
+    color: '#fbbf24',
+    items: [
+      { to: '/workforce', icon: Users, label: 'Workforce' },
+      { to: '/turnover', icon: TrendingDown, label: 'Turnover' },
+      { to: '/careers', icon: Briefcase, label: 'Careers' },
+      { to: '/managers', icon: UserCog, label: 'Managers' },
     ],
   },
   {
     label: 'Intelligence',
-    color: '#a78bfa',
+    color: '#fb7185',
     items: [
       { to: '/insights', icon: Sparkles, label: 'AI Insights' },
-    ],
-  },
-  {
-    label: 'Operations',
-    color: '#fbbf24',
-    items: [
+      { to: '/reports', icon: FileText, label: 'Reports' },
       { to: '/pipeline', icon: Activity, label: 'Pipeline Hub' },
       { to: '/upload', icon: Upload, label: 'Data Upload' },
-      { to: '/reports', icon: FileText, label: 'Reports' },
       { to: '/settings', icon: Settings, label: 'Settings' },
     ],
   },

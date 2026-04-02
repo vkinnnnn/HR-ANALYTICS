@@ -6,6 +6,13 @@ import { AmbientBackground } from './components/layout/AmbientBackground';
 import { ChatTrigger } from './components/chat/ChatTrigger';
 import { ChatPanel, type ChatMessage } from './components/chat/ChatPanel';
 import { Dashboard } from './pages/Dashboard';
+import { RecognitionExplorer } from './pages/RecognitionExplorer';
+import { Categories } from './pages/Categories';
+import { Inequality } from './pages/Inequality';
+import { Quality } from './pages/Quality';
+import { Flow } from './pages/Flow';
+import { Nominators } from './pages/Nominators';
+import { Fairness } from './pages/Fairness';
 import { Workforce } from './pages/Workforce';
 import { Turnover } from './pages/Turnover';
 import { Tenure } from './pages/Tenure';
@@ -133,11 +140,6 @@ function AppContent() {
     setChatMessages([]);
   }, []);
 
-  const handleChartClick = useCallback((question: string) => {
-    setPrefillMessage(question);
-    setChatOpen(true);
-  }, []);
-
   const handleOpenChat = useCallback(() => {
     setChatOpen(true);
     setHasNotification(false);
@@ -159,7 +161,15 @@ function AppContent() {
         }}
       >
         <Routes>
-          <Route path="/" element={<Dashboard onChartClick={handleChartClick} />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/explorer" element={<RecognitionExplorer />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/inequality" element={<Inequality />} />
+          <Route path="/quality" element={<Quality />} />
+          <Route path="/flow" element={<Flow />} />
+          <Route path="/network" element={<Flow />} />
+          <Route path="/nominators" element={<Nominators />} />
+          <Route path="/fairness" element={<Fairness />} />
           <Route path="/workforce" element={<Workforce />} />
           <Route path="/turnover" element={<Turnover />} />
           <Route path="/tenure" element={<Tenure />} />

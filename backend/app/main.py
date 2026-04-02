@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
 from .data_loader import load_and_process, is_loaded
+from .recognition_loader import load_recognition
 from .routers import (
     workforce,
     turnover,
@@ -20,6 +21,7 @@ from .routers import (
     taxonomy_router,
     pipeline_router,
     ws,
+    recognition,
 )
 
 
@@ -53,9 +55,14 @@ async def lifespan(app: FastAPI):
     if os.path.isdir(data_dir):
         try:
             load_and_process(data_dir)
-            print(f"Data loaded from {data_dir}")
+            print(f"Workforce data loaded from {data_dir}")
         except Exception as e:
-            print(f"Warning: Could not auto-load data: {e}")
+            print(f"Warning: Could not auto-load workforce data: {e}")
+        try:
+            load_recognition(data_dir)
+            print(f"Recognition data loaded from {data_dir}")
+        except Exception as e:
+            print(f"Warning: Could not auto-load recognition data: {e}")
 
     yield
 
@@ -99,6 +106,7 @@ app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxonomy"])
 app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
+app.include_router(recognition.router, prefix="/api/recognition", tags=["Recognition"])
 app.include_router(ws.router, tags=["WebSocket"])
 
 

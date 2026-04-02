@@ -1,90 +1,114 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Cell,
+  BarChart, Bar, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
 } from 'recharts';
-import {
-  LayoutDashboard, Users, TrendingDown, Clock, UserCheck,
-  TrendingUp, AlertTriangle, BarChart3, Zap, PieChart,
-} from 'lucide-react';
+import { LayoutDashboard, Award, GitFork, Target, Shuffle, Zap, AlertTriangle } from 'lucide-react';
 import api from '../lib/api';
-import { Panel } from '../components/ui/Panel';
-import { KpiCard } from '../components/ui/KpiCard';
 import { PageHero } from '../components/ui/PageHero';
-import { Badge } from '../components/ui/Badge';
+import { Panel } from '../components/ui/Panel';
 import { SectionHeader } from '../components/ui/SectionHeader';
+import { KpiCard } from '../components/ui/KpiCard';
+import { Badge } from '../components/ui/Badge';
 import { InsightBanner } from '../components/ui/InsightBanner';
 import { ChartTooltip } from '../components/charts/ChartTooltip';
 
-interface Summary {
-  total_headcount: number;
-  active: number;
-  departed: number;
-  turnover_rate: number;
-  avg_tenure_years: number;
-  new_hires_90d: number;
-  prior_hires_90d: number;
-  unique_departments: number;
+/* ---------- types ---------- */
+interface RecSummary {
+  total_awards: number;
+  gini: number;
+  avg_specificity: number;
+  cross_function_rate: number;
 }
 
-interface HeadcountPoint {
-  month: string;
-  headcount: number;
+interface Category {
+  id: string;
+  name: string;
+  count: number;
+  percentage: number;
+  avg_specificity: number;
 }
 
-interface DeptTurnover {
-  department: string;
-  total: number;
-  active: number;
-  departed: number;
-  turnover_rate: number;
-}
-
-interface TenureBucket {
-  bin: string;
+interface NlpQuality {
+  band: string;
   count: number;
 }
 
-interface FlightRiskEmployee {
-  pk_person: string;
-  job_title: string;
-  department: string;
-  tenure_years: number;
-  risk_score: number;
+interface TopRole {
+  role: string;
+  count: number;
 }
 
-interface DashboardProps {
-  onChartClick?: (question: string) => void;
+interface Nominator {
+  role: string;
+  total: number;
+  dominant_category: string;
+  concentration_pct: number;
+  blind_spot: boolean;
 }
 
-export function Dashboard({ onChartClick }: DashboardProps) {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [headcountTrend, setHeadcountTrend] = useState<HeadcountPoint[]>([]);
-  const [deptTurnover, setDeptTurnover] = useState<DeptTurnover[]>([]);
-  const [tenureDist, setTenureDist] = useState<TenureBucket[]>([]);
-  const [medianTenure, setMedianTenure] = useState(0);
-  const [flightRisk, setFlightRisk] = useState<FlightRiskEmployee[]>([]);
+interface FlowDirection {
+  direction: string;
+  count: number;
+}
+
+/* ---------- constants ---------- */
+const PALETTE = ['#FF8A4C', '#34d399', '#a78bfa', '#60a5fa', '#fbbf24', '#fb7185', '#22d3ee', '#f472b6'];
+const DIRECTION_COLORS: Record<string, string> = { Downward: '#fb7185', Upward: '#34d399', Lateral: '#60a5fa' };
+const SPEC_COLORS: Record<string, string> = {
+  'Very Vague': '#fb7185',
+  'Vague': '#fbbf24',
+  'Moderate': '#a78bfa',
+  'Specific': '#34d399',
+  'Highly Specific': '#22d3ee',
+};
+const AXIS_STYLE = { fill: '#52525b', fontSize: 10 };
+const GRID_STROKE = 'rgba(255,255,255,0.03)';
+
+const Shimmer = ({ height = 280 }: { height?: number }) => (
+  <div style={{ height, background: 'rgba(255,255,255,0.03)', borderRadius: 8, animation: 'shimmer 2s infinite' }} />
+);
+
+const ShimmerRows = ({ count = 5 }: { count?: number }) => (
+  <div className="space-y-3">
+    {Array.from({ length: count }, (_, i) => (
+      <div key={i} style={{ height: 44, background: 'rgba(255,255,255,0.03)', borderRadius: 12, animation: 'shimmer 2s infinite' }} />
+    ))}
+  </div>
+);
+
+const TableLabel = ({ children }: { children: string }) => (
+  <span style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{children}</span>
+);
+
+/* ---------- component ---------- */
+export function Dashboard() {
+  const [summary, setSummary] = useState<RecSummary | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [nlpQuality, setNlpQuality] = useState<NlpQuality[]>([]);
+  const [topRoles, setTopRoles] = useState<TopRole[]>([]);
+  const [nominators, setNominators] = useState<Nominator[]>([]);
+  const [flowData, setFlowData] = useState<FlowDirection[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [sumRes, trendRes, deptRes, tenureRes, riskRes] = await Promise.all([
-          api.get('/api/workforce/summary'),
-          api.get('/api/workforce/headcount-trend'),
-          api.get('/api/turnover/by-department'),
-          api.get('/api/tenure/distribution'),
-          api.get('/api/predictions/flight-risk', { params: { top_n: 5 } }),
+        const [sumRes, catRes, nlpRes, roleRes, nomRes, flowRes] = await Promise.all([
+          api.get('/api/recognition/summary'),
+          api.get('/api/recognition/categories'),
+          api.get('/api/recognition/nlp-quality'),
+          api.get('/api/recognition/top-roles'),
+          api.get('/api/recognition/nominators'),
+          api.get('/api/recognition/flow'),
         ]);
         setSummary(sumRes.data);
-        setHeadcountTrend(trendRes.data?.data || trendRes.data || []);
-        const turnoverData = (deptRes.data?.data || deptRes.data || []).slice(0, 10);
-        setDeptTurnover(turnoverData);
-        setTenureDist(tenureRes.data?.data || tenureRes.data || []);
-        setMedianTenure(tenureRes.data?.median_tenure_years || 0);
-        const riskEmployees = (riskRes.data?.employees || riskRes.data || [])
-          .filter((e: FlightRiskEmployee) => e.job_title && e.job_title !== 'nan');
-        setFlightRisk(riskEmployees);
+        setCategories((catRes.data?.categories || []).sort((a: Category, b: Category) => b.count - a.count));
+        setNlpQuality(nlpRes.data?.specificity_distribution || []);
+        setTopRoles((roleRes.data?.top_recipients || []).slice(0, 10));
+        setNominators((nomRes.data?.blind_spots || []).slice(0, 10));
+        const dirSplit = flowRes.data?.direction_split || {};
+        setFlowData(Object.entries(dirSplit).map(([d, c]) => ({ direction: d, count: c as number })));
       } catch (err) {
         console.error('Dashboard load error', err);
       } finally {
@@ -94,90 +118,57 @@ export function Dashboard({ onChartClick }: DashboardProps) {
     load();
   }, []);
 
-  // Use the COMPANY-WIDE turnover rate from summary (not from top-10 slice)
-  const companyAvgTurnover = summary?.turnover_rate ?? 0;
-
-  // Generate AI insight from data
-  const insightText = useMemo(() => {
-    if (!deptTurnover.length && !flightRisk.length) return '';
-    const parts: string[] = [];
-    if (deptTurnover.length > 0) {
-      const worst = deptTurnover[0];
-      parts.push(`${worst.department} has ${worst.turnover_rate}% turnover — the highest across all departments`);
-    }
-    if (flightRisk.length > 0) {
-      const highRisk = flightRisk.filter(e => e.risk_score > 0.8);
-      if (highRisk.length > 0) {
-        const depts = [...new Set(highRisk.map(e => e.department))];
-        parts.push(`${highRisk.length} employee${highRisk.length > 1 ? 's' : ''} in ${depts.join(', ')} flagged at ${Math.round(highRisk[0].risk_score * 100)}%+ flight risk`);
-      }
-    }
-    return parts.join('. ') + '.';
-  }, [deptTurnover, flightRisk]);
-
-  // Format headcount trend dates
-  const formattedTrend = useMemo(() => {
-    return headcountTrend.map(p => {
-      const d = new Date(p.month + '-01');
-      const mo = d.toLocaleString('en', { month: 'short' });
-      const yr = String(d.getFullYear()).slice(2);
-      return { ...p, label: `${mo} '${yr}` };
-    });
-  }, [headcountTrend]);
-
   const kpiLoading = loading || !summary;
+
+  /* AI insight from category data */
+  const insightText = useMemo(() => {
+    if (!categories.length) return '';
+    const dominant = categories[0];
+    const smallest = categories[categories.length - 1];
+    return `${dominant.name} dominates with ${dominant.count} awards (${((dominant.count / (summary?.total_awards || 1)) * 100).toFixed(0)}% of total). ${smallest.name} is the least recognized category at only ${smallest.count} awards — consider targeted recognition campaigns.`;
+  }, [categories, summary]);
+
+  /* blind spots */
+  const blindSpots = nominators.slice(0, 10);
 
   return (
     <div>
-      {/* Page Hero */}
       <PageHero
         icon={<LayoutDashboard size={20} />}
         title="Dashboard"
-        subtitle="Workforce health — headcount, turnover, tenure, and risk signals at a glance."
+        subtitle="Recognition health at a glance"
       />
 
-      {/* KPI Row — 4 cards */}
-      <div id="kpi-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
+      {/* KPI Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
+        <KpiCard label="Total Awards" value={summary?.total_awards ?? 0} icon={<Award size={18} />} color="#FF8A4C" delay={0} loading={kpiLoading} />
         <KpiCard
-          label="Total Headcount"
-          value={summary?.active ?? 0}
-          icon={<Users size={18} />}
-          color="#FF8A4C"
-          delay={0}
-          loading={kpiLoading}
-        />
-        <KpiCard
-          label="Turnover Rate"
-          value={summary?.turnover_rate ?? 0}
-          format="percent"
-          icon={<TrendingDown size={18} />}
-          color="#fb7185"
+          label="Recognition Gini"
+          value={summary?.gini ?? 0}
+          format="decimal"
+          icon={<GitFork size={18} />}
+          color="#a78bfa"
           delay={60}
           loading={kpiLoading}
         />
         <KpiCard
-          label="Avg Tenure"
-          value={summary?.avg_tenure_years ?? 0}
+          label="Avg Specificity"
+          value={summary?.avg_specificity ?? 0}
           format="decimal"
-          suffix=" yr"
-          icon={<Clock size={18} />}
-          color="#a78bfa"
+          suffix="/1.0"
+          icon={<Target size={18} />}
+          color="#fb7185"
           delay={120}
           loading={kpiLoading}
         />
         <KpiCard
-          label="New Hires (90d)"
-          value={summary?.new_hires_90d ?? 0}
-          icon={<UserCheck size={18} />}
+          label="Cross-Function Rate"
+          value={summary?.cross_function_rate ?? 0}
+          format="percent"
+          icon={<Shuffle size={18} />}
           color="#34d399"
           delay={180}
           loading={kpiLoading}
-          change={
-            summary && summary.prior_hires_90d > 0
-              ? Math.round(((summary.new_hires_90d - summary.prior_hires_90d) / summary.prior_hires_90d) * 100 * 10) / 10
-              : undefined
-          }
-          changeLabel="vs prior 90d"
         />
       </div>
 
@@ -189,272 +180,182 @@ export function Dashboard({ onChartClick }: DashboardProps) {
           message={insightText}
           color="#FF8A4C"
           action={
-            <button
-              style={{
-                borderRadius: 9999,
-                background: 'rgba(255,138,76,0.12)',
-                border: '1px solid rgba(255,138,76,0.25)',
-                color: '#FF8A4C',
-                fontSize: 10,
-                fontWeight: 700,
-                padding: '6px 14px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <button style={{
+              borderRadius: 9999, background: 'rgba(255,138,76,0.12)', border: '1px solid rgba(255,138,76,0.25)',
+              color: '#FF8A4C', fontSize: 10, fontWeight: 700, padding: '6px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>
               View Details →
             </button>
           }
         />
       )}
 
-      {/* Charts Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        {/* Headcount Trend */}
-        <Panel delay={240} id="headcount-chart">
+      {/* Charts Row 1: Category Distribution + Recognition Direction */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 16, marginBottom: 16 }}>
+        {/* Category Distribution */}
+        <Panel delay={240}>
           <SectionHeader
-            icon={<TrendingUp size={14} />}
-            title="Headcount Trend"
-            subtitle="Monthly active headcount over time"
-            action={<Badge label={`${formattedTrend.length} months`} color="#FF8A4C" />}
+            icon={<Award size={14} />}
+            title="Category Distribution"
+            subtitle="Awards by recognition category"
+            action={<Badge label={`${categories.length} categories`} color="#FF8A4C" />}
           />
-          {loading ? (
-            <div style={{ height: 280, background: 'rgba(255,255,255,0.03)', borderRadius: 8, animation: 'shimmer 2s infinite' }} />
-          ) : (
+          {loading ? <Shimmer /> : (
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={formattedTrend}>
-                <defs>
-                  <linearGradient id="hcGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#FF8A4C" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#FF8A4C" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: '#52525b', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fill: '#52525b', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  domain={['dataMin - 50', 'dataMax + 50']}
-                />
+              <BarChart data={categories} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis type="number" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+                <YAxis dataKey="name" type="category" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} width={180} />
                 <Tooltip content={<ChartTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="headcount"
-                  stroke="#FF8A4C"
-                  fill="url(#hcGrad)"
-                  strokeWidth={2}
-                  name="Headcount"
-                  dot={false}
-                  activeDot={{ r: 4, fill: '#FF8A4C', stroke: '#131318', strokeWidth: 2 }}
-                />
-              </AreaChart>
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={18} name="Awards">
+                  {categories.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           )}
         </Panel>
 
-        {/* Turnover by Department — two-color system */}
-        <Panel delay={300} id="turnover-chart">
+        {/* Recognition Direction */}
+        <Panel delay={300}>
           <SectionHeader
-            icon={<BarChart3 size={14} />}
-            title="Turnover by Department"
-            subtitle="Top 10 departments · rose = above avg, emerald = at/below"
-            action={<Badge label={`Avg: ${companyAvgTurnover}%`} color="#fbbf24" />}
+            icon={<Shuffle size={14} />}
+            title="Recognition Direction"
+            subtitle="Downward, upward, and lateral flows"
           />
-          {loading ? (
-            <div style={{ height: 280, background: 'rgba(255,255,255,0.03)', borderRadius: 8, animation: 'shimmer 2s infinite' }} />
-          ) : (
+          {loading ? <Shimmer /> : (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={deptTurnover} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis
-                  type="number"
-                  tick={{ fill: '#52525b', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  domain={[0, 'dataMax']}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <YAxis
-                  dataKey="department"
-                  type="category"
-                  tick={{ fill: '#71717a', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={120}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <ReferenceLine
-                  x={companyAvgTurnover}
-                  stroke="#fbbf24"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  label={{
-                    value: `Avg: ${companyAvgTurnover}%`,
-                    position: 'top',
-                    fill: '#fbbf24',
-                    fontSize: 10,
-                    fontWeight: 700,
-                  }}
-                />
-                <Bar
-                  dataKey="turnover_rate"
-                  radius={[0, 4, 4, 0]}
-                  barSize={14}
-                  name="Turnover %"
-                  cursor="pointer"
-                  onClick={(data: any) => {
-                    if (onChartClick && data?.department) {
-                      onChartClick(`Tell me more about ${data.department} department turnover`);
-                    }
-                  }}
+              <PieChart>
+                <Pie
+                  data={flowData}
+                  dataKey="count"
+                  nameKey="direction"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  stroke="none"
                 >
-                  {deptTurnover.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.turnover_rate > companyAvgTurnover ? '#fb7185' : '#34d399'}
-                    />
+                  {flowData.map((entry, i) => (
+                    <Cell key={i} fill={DIRECTION_COLORS[entry.direction] || PALETTE[i % PALETTE.length]} />
                   ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Panel>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* Tenure Distribution — meaningful bins */}
-        <Panel delay={360} id="tenure-chart">
-          <SectionHeader
-            icon={<PieChart size={14} />}
-            title="Tenure Distribution"
-            subtitle="Employees grouped by years of service"
-            action={medianTenure > 0 ? <Badge label={`Median: ${medianTenure} yr`} color="#a78bfa" /> : undefined}
-          />
-          {loading ? (
-            <div style={{ height: 280, background: 'rgba(255,255,255,0.03)', borderRadius: 8, animation: 'shimmer 2s infinite' }} />
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={tenureDist}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis
-                  dataKey="bin"
-                  tick={{ fill: '#52525b', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: '#52525b', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
+                </Pie>
                 <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={24} name="Employees">
-                  {tenureDist.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.bin === '0-6mo' || entry.bin === '6-12mo' ? '#fb7185' : '#a78bfa'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           )}
-        </Panel>
-
-        {/* Flight Risk Table */}
-        <Panel delay={420} id="flight-risk-table">
-          <SectionHeader
-            icon={<AlertTriangle size={14} />}
-            title="Top Flight Risks"
-            subtitle="Employees most likely to depart"
-            action={<Badge label={`${flightRisk.length} flagged`} color="#fb7185" dot />}
-          />
-          {loading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} style={{ height: 44, background: 'rgba(255,255,255,0.03)', borderRadius: 12, animation: 'shimmer 2s infinite' }} />
+          {/* Legend */}
+          {!loading && (
+            <div className="flex items-center justify-center gap-5 mt-2">
+              {flowData.map((entry, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: DIRECTION_COLORS[entry.direction] || PALETTE[i] }} />
+                  <span style={{ fontSize: 11, color: '#a1a1aa' }}>{entry.direction}</span>
+                </div>
               ))}
             </div>
-          ) : flightRisk.length === 0 ? (
-            <div style={{ padding: '32px 0', textAlign: 'center', color: '#52525b', fontSize: 13 }}>
-              No flight risk data available. Train the model first.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 6 }}>
-              {/* Header */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.2fr 1fr 0.5fr 80px',
-                  gap: 8,
-                  padding: '6px 14px',
-                }}
-              >
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Employee</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Department</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Risk</span>
-                <span />
-              </div>
-              {/* Rows */}
-              {flightRisk.map((emp, i) => {
-                const pct = Math.round(emp.risk_score * 100);
-                const isHigh = pct >= 80;
-                const isMed = pct >= 60 && pct < 80;
-                const badgeColor = isHigh ? '#fb7185' : isMed ? '#fbbf24' : '#34d399';
-                const displayTitle = emp.job_title && emp.job_title !== 'nan' && emp.job_title !== 'null'
-                  ? emp.job_title
-                  : 'Untitled Role';
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1.2fr 1fr 0.5fr 80px',
-                      gap: 8,
-                      padding: '11px 14px',
-                      borderRadius: 12,
-                      background: i === 0 ? 'rgba(251,113,133,0.06)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${i === 0 ? 'rgba(251,113,133,0.10)' : 'rgba(255,255,255,0.06)'}`,
-                      alignItems: 'center',
-                      transition: 'background 0.15s',
-                    }}
-                  >
-                    <div>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa', display: 'block' }}>{displayTitle}</span>
-                      <span style={{ fontSize: 10, color: '#52525b' }}>{emp.tenure_years?.toFixed(1)} yr tenure</span>
-                    </div>
-                    <span style={{ fontSize: 12, color: '#a1a1aa' }}>{emp.department}</span>
-                    <Badge label={`${pct}%`} color={badgeColor} dot />
-                    <button
-                      style={{
-                        borderRadius: 9999,
-                        background: 'rgba(255,138,76,0.10)',
-                        border: '1px solid rgba(255,138,76,0.25)',
-                        color: '#FF8A4C',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '4px 10px',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Take Action
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
           )}
         </Panel>
       </div>
+
+      {/* Charts Row 2: Specificity Distribution + Top 10 Roles */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        {/* Specificity Distribution */}
+        <Panel delay={360}>
+          <SectionHeader
+            icon={<Target size={14} />}
+            title="Specificity Distribution"
+            subtitle="How specific are recognition messages?"
+          />
+          {loading ? <Shimmer /> : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={nlpQuality}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis dataKey="band" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={24} name="Messages">
+                  {nlpQuality.map((entry, i) => (
+                    <Cell key={i} fill={SPEC_COLORS[entry.band] || PALETTE[i % PALETTE.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
+
+        {/* Top 10 Most Recognized Roles */}
+        <Panel delay={420}>
+          <SectionHeader
+            icon={<Award size={14} />}
+            title="Top 10 Most Recognized Roles"
+            subtitle="Roles receiving the most awards"
+            action={<Badge label={`${topRoles.length} roles`} color="#34d399" />}
+          />
+          {loading ? <Shimmer /> : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={topRoles} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis type="number" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+                <YAxis dataKey="role" type="category" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} width={130} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={14} name="Awards">
+                  {topRoles.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
+      </div>
+
+      {/* Blind Spot Nominators Table */}
+      <Panel delay={480}>
+        <SectionHeader
+          icon={<AlertTriangle size={14} />}
+          title="Blind Spot Nominators"
+          subtitle="Roles with high concentration in a single category"
+          action={<Badge label={`${blindSpots.length} flagged`} color="#fb7185" dot />}
+        />
+        {loading ? <ShimmerRows /> : blindSpots.length === 0 ? (
+          <div style={{ padding: '32px 0', textAlign: 'center', color: '#52525b', fontSize: 13 }}>
+            No blind spot nominators detected.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {/* Header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.5fr 1fr 80px', gap: 8, padding: '6px 14px' }}>
+              <TableLabel>Role</TableLabel>
+              <TableLabel>Total</TableLabel>
+              <TableLabel>Dominant Category</TableLabel>
+              <TableLabel>Concentration</TableLabel>
+            </div>
+            {/* Rows */}
+            {blindSpots.map((nom, i) => {
+              const isHigh = nom.concentration_pct >= 80;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 0.5fr 1fr 80px',
+                    gap: 8,
+                    padding: '11px 14px',
+                    borderRadius: 12,
+                    background: isHigh ? 'rgba(251,113,133,0.06)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${isHigh ? 'rgba(251,113,133,0.10)' : 'rgba(255,255,255,0.06)'}`,
+                    alignItems: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{nom.role}</span>
+                  <span style={{ fontSize: 12, color: '#a1a1aa' }}>{nom.total}</span>
+                  <span style={{ fontSize: 12, color: '#a1a1aa' }}>{nom.dominant_category}</span>
+                  <Badge label={`${nom.concentration_pct.toFixed(0)}%`} color={isHigh ? '#fb7185' : '#fbbf24'} dot />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }
