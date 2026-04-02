@@ -19,7 +19,7 @@ interface QualityData {
   action_verb_rate: number;
   quantified_impact_rate: number;
   cliche_rate: number;
-  specificity_bands: SpecBand[];
+  specificity_distribution: SpecBand[];
   avg_word_count: number;
   median_word_count: number;
   min_word_count: number;
@@ -108,13 +108,13 @@ export function Quality() {
         <SectionHeader icon={<MessageSquareText size={14} />} title="Specificity Distribution" subtitle="How specific are recognition messages?" />
         {loading ? <Shimmer height={300} /> : (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data?.specificity_bands ?? []} margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
+            <BarChart data={data?.specificity_distribution ?? []} margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
               <XAxis dataKey="band" tick={AXIS} axisLine={false} tickLine={false} />
               <YAxis tick={AXIS} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} />
               <Bar dataKey="count" radius={[4, 4, 0, 0]} name="Awards">
-                {(data?.specificity_bands ?? []).map((b, i) => (
+                {(data?.specificity_distribution ?? []).map((b, i) => (
                   <Cell key={i} fill={BAND_COLORS[b.band] ?? PALETTE[i % PALETTE.length]} />
                 ))}
               </Bar>

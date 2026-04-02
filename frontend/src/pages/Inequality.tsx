@@ -10,8 +10,8 @@ import { ChartTooltip } from '../components/charts/ChartTooltip';
 
 /* ---------- types ---------- */
 interface LorenzPoint {
-  population_pct: number;
-  recognition_pct: number;
+  x: number;
+  y: number;
 }
 
 interface TopRole {
@@ -22,11 +22,11 @@ interface TopRole {
 interface InequalityData {
   gini: number;
   lorenz_curve: LorenzPoint[];
-  top_10_pct_share: number;
-  bottom_50_pct_share: number;
-  top_recipients: TopRole[];
-  median_awards: number;
-  mean_awards: number;
+  top_10_share: number;
+  bottom_50_share: number;
+  power_recipients: TopRole[];
+  single_award_roles: number;
+  total_roles: number;
 }
 
 /* ---------- constants ---------- */
@@ -57,7 +57,7 @@ export function Inequality() {
 
   const lorenzWithEquality = (data?.lorenz_curve ?? []).map(p => ({
     ...p,
-    equality: p.population_pct,
+    equality: p.x,
   }));
 
   return (
@@ -98,7 +98,7 @@ export function Inequality() {
           {loading ? <Shimmer height={120} /> : (
             <div className="flex flex-col items-center py-4">
               <span style={{ fontSize: 44, fontWeight: 800, color: '#fb7185', lineHeight: 1 }}>
-                {((data?.top_10_pct_share ?? 0) * 100).toFixed(1)}%
+                {((data?.top_10_share ?? 0) * 100).toFixed(1)}%
               </span>
               <span style={{ fontSize: 12, color: '#71717a', marginTop: 8 }}>of all recognition</span>
             </div>
@@ -111,7 +111,7 @@ export function Inequality() {
           {loading ? <Shimmer height={120} /> : (
             <div className="flex flex-col items-center py-4">
               <span style={{ fontSize: 44, fontWeight: 800, color: '#fbbf24', lineHeight: 1 }}>
-                {((data?.bottom_50_pct_share ?? 0) * 100).toFixed(1)}%
+                {((data?.bottom_50_share ?? 0) * 100).toFixed(1)}%
               </span>
               <span style={{ fontSize: 12, color: '#71717a', marginTop: 8 }}>of all recognition</span>
             </div>
@@ -126,11 +126,11 @@ export function Inequality() {
           <ResponsiveContainer width="100%" height={350}>
             <ComposedChart data={lorenzWithEquality} margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
-              <XAxis dataKey="population_pct" tick={AXIS} axisLine={false} tickLine={false} label={{ value: 'Population %', position: 'bottom', fill: '#52525b', fontSize: 10 }} />
+              <XAxis dataKey="x" tick={AXIS} axisLine={false} tickLine={false} label={{ value: 'Population %', position: 'bottom', fill: '#52525b', fontSize: 10 }} />
               <YAxis tick={AXIS} axisLine={false} tickLine={false} label={{ value: 'Recognition %', angle: -90, position: 'insideLeft', fill: '#52525b', fontSize: 10 }} />
               <Tooltip content={<ChartTooltip />} />
               <Line type="linear" dataKey="equality" stroke="#52525b" strokeDasharray="6 4" strokeWidth={1} dot={false} name="Perfect Equality" />
-              <Area type="monotone" dataKey="recognition_pct" stroke={PALETTE[0]} fill={PALETTE[0]} fillOpacity={0.15} strokeWidth={2} name="Actual Distribution" dot={false} />
+              <Area type="monotone" dataKey="y" stroke={PALETTE[0]} fill={PALETTE[0]} fillOpacity={0.15} strokeWidth={2} name="Actual Distribution" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         )}
@@ -140,8 +140,8 @@ export function Inequality() {
       <Panel delay={240}>
         <SectionHeader icon={<Scale size={14} />} title="Top 10 Most Recognized Roles" />
         {loading ? <Shimmer height={300} /> : (
-          <ResponsiveContainer width="100%" height={Math.max(250, (data?.top_recipients?.length ?? 0) * 36)}>
-            <BarChart data={data?.top_recipients ?? []} layout="vertical" margin={{ left: 140 }}>
+          <ResponsiveContainer width="100%" height={Math.max(250, (data?.power_recipients?.length ?? 0) * 36)}>
+            <BarChart data={data?.power_recipients ?? []} layout="vertical" margin={{ left: 140 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
               <XAxis type="number" tick={AXIS} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="role" tick={AXIS} axisLine={false} tickLine={false} width={130} />

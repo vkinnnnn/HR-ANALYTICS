@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/Badge';
 /* ---------- types ---------- */
 interface NominatorRow {
   role: string;
-  total_awards: number;
+  total: number;
   avg_specificity: number;
   category_diversity: number;
   composite_score: number;
@@ -104,7 +104,7 @@ export function Nominators() {
                   {row.role}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#fafafa' }}>
-                  {row.total_awards}
+                  {row.total}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor(row.avg_specificity) }}>
                   {row.avg_specificity.toFixed(2)}
@@ -162,7 +162,7 @@ export function Nominators() {
                 }}
               >
                 <span style={{ fontSize: 12, fontWeight: 500, color: '#fafafa' }}>{row.role}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#fafafa' }}>{row.total_awards}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#fafafa' }}>{row.total}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#fb7185' }}>{row.avg_specificity.toFixed(2)}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#fb7185' }}>{row.category_diversity.toFixed(2)}</span>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#fb7185' }}>{row.composite_score.toFixed(2)}</span>

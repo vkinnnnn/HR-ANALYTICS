@@ -8,18 +8,18 @@ import { Badge } from '../components/ui/Badge';
 
 /* ---------- types ---------- */
 interface Award {
-  id: number;
   award_title: string;
-  recipient: string;
-  nominator: string;
+  recipient_title: string;
+  nominator_title: string;
   category: string;
   specificity: number;
   word_count: number;
   message: string;
+  full_message: string;
 }
 
 interface ExplorerResponse {
-  results: Award[];
+  awards: Award[];
   total: number;
   limit: number;
   offset: number;
@@ -63,8 +63,8 @@ export function RecognitionExplorer() {
   const [specBand, setSpecBand] = useState('All');
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [functions, setFunctions] = useState<string[]>([]);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const functions = ['Engineering & Technology','Customer Service','Product & Design','Finance & Operations','Marketing & Brand','Data & Analytics','People & HR','Sales','Legal & Compliance','Operations','Other'];
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -81,14 +81,13 @@ export function RecognitionExplorer() {
   }, [category, func, specBand, search, offset]);
 
   useEffect(() => {
-    api.get<string[]>('/api/recognition/functions').then(r => setFunctions(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => { setOffset(0); }, [category, func, specBand, search]);
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const total = data?.total ?? 0;
-  const results = data?.results ?? [];
+  const results = data?.awards ?? [];
 
   return (
     <div style={{ maxWidth: 1320, margin: '0 auto', padding: '0 28px 44px' }}>
@@ -145,10 +144,10 @@ export function RecognitionExplorer() {
         ) : results.length === 0 ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#52525b' }}>No results found</div>
         ) : (
-          results.map((r) => (
-            <div key={r.id}>
+          results.map((r, idx) => (
+            <div key={idx}>
               <div
-                onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '2fr 1.2fr 1.2fr 80px 90px 70px',
@@ -165,15 +164,15 @@ export function RecognitionExplorer() {
                 onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
               >
                 <span style={{ color: '#fafafa', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.award_title}</span>
-                <span style={{ color: '#a1a1aa', fontSize: 12 }}>{r.recipient}</span>
-                <span style={{ color: '#a1a1aa', fontSize: 12 }}>{r.nominator}</span>
+                <span style={{ color: '#a1a1aa', fontSize: 12 }}>{r.recipient_title}</span>
+                <span style={{ color: '#a1a1aa', fontSize: 12 }}>{r.nominator_title}</span>
                 <span><Badge label={r.category} color={CATEGORY_COLORS[r.category] ?? '#FF8A4C'} /></span>
                 <span style={{ color: r.specificity >= 0.6 ? '#34d399' : r.specificity >= 0.3 ? '#fbbf24' : '#fb7185', fontSize: 12, fontWeight: 700 }}>
                   {r.specificity.toFixed(2)}
                 </span>
                 <span style={{ color: '#a1a1aa', fontSize: 12 }}>{r.word_count}</span>
               </div>
-              {expandedId === r.id && (
+              {expandedIdx === idx && (
                 <div style={{
                   padding: '12px 14px 12px 28px',
                   marginBottom: 8,
@@ -184,7 +183,7 @@ export function RecognitionExplorer() {
                   borderRadius: 12,
                   border: '1px solid rgba(255,255,255,0.06)',
                 }}>
-                  {r.message}
+                  {r.full_message || r.message}
                 </div>
               )}
             </div>

@@ -35,8 +35,15 @@ export function Fairness() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<FairnessData>('/api/recognition/fairness')
-      .then(r => setData(r.data))
+    api.get('/api/recognition/fairness')
+      .then(r => {
+        const d = r.data;
+        setData({
+          company_avg_specificity: d.avg_specificity,
+          by_function: (d.by_function || []).map((f: any) => ({ name: f.function, avg_specificity: f.avg_specificity, count: f.count })),
+          by_seniority: (d.by_seniority || []).map((s: any) => ({ name: s.seniority, avg_specificity: s.avg_specificity, count: s.count })),
+        });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

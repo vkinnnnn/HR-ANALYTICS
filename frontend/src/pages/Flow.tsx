@@ -7,29 +7,24 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { Badge } from '../components/ui/Badge';
 
 /* ---------- types ---------- */
-interface DirectionSplit {
-  downward_pct: number;
-  upward_pct: number;
-  lateral_pct: number;
-}
-
 interface CrossFunctionCell {
-  from_function: string;
-  to_function: string;
-  count: number;
+  source: string;
+  target: string;
+  value: number;
 }
 
 interface FlowData {
-  direction_split: DirectionSplit;
-  cross_function_heatmap: CrossFunctionCell[];
-  same_function_pct: number;
-  cross_function_pct: number;
+  direction_split: Record<string, number>;
+  direction_pct: Record<string, number>;
+  heatmap: CrossFunctionCell[];
+  same_function_rate: number;
+  cross_function_rate: number;
   reciprocal_pairs: number;
 }
 
 /* ---------- constants ---------- */
 const PALETTE = ['#FF8A4C', '#34d399', '#a78bfa', '#60a5fa', '#fbbf24', '#fb7185', '#22d3ee', '#f472b6'];
-const DIR_COLORS: Record<string, string> = { downward: '#fb7185', upward: '#34d399', lateral: '#60a5fa' };
+const DIR_COLORS: Record<string, string> = { Downward: '#fb7185', Upward: '#34d399', Lateral: '#60a5fa' };
 
 const Shimmer = ({ height = 280 }: { height?: number }) => (
   <div style={{ height, background: 'rgba(255,255,255,0.03)', borderRadius: 8, animation: 'shimmer 2s infinite' }} />
@@ -46,10 +41,10 @@ export function Flow() {
       .finally(() => setLoading(false));
   }, []);
 
-  const heatmap = data?.cross_function_heatmap ?? [];
-  const fromFuncs = [...new Set(heatmap.map(h => h.from_function))];
-  const toFuncs = [...new Set(heatmap.map(h => h.to_function))];
-  const maxCount = Math.max(...heatmap.map(h => h.count), 1);
+  const heatmap = data?.heatmap ?? [];
+  const fromFuncs = [...new Set(heatmap.map(h => h.source))];
+  const toFuncs = [...new Set(heatmap.map(h => h.target))];
+  const maxCount = Math.max(...heatmap.map(h => h.value), 1);
 
   return (
     <div style={{ maxWidth: 1320, margin: '0 auto', padding: '0 28px 44px' }}>
@@ -57,7 +52,7 @@ export function Flow() {
 
       {/* Direction Split KPIs */}
       <div className="grid grid-cols-3 gap-4 mb-4">
-        {(['downward', 'upward', 'lateral'] as const).map((dir, i) => (
+        {(['Downward', 'Upward', 'Lateral'] as const).map((dir, i) => (
           <Panel key={dir} delay={i * 60}>
             {loading ? <Shimmer height={110} /> : (
               <div className="flex flex-col items-center py-4">
@@ -65,10 +60,10 @@ export function Flow() {
                   {dir} Recognition
                 </span>
                 <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, color: DIR_COLORS[dir] }}>
-                  {((data?.direction_split?.[`${dir}_pct` as keyof DirectionSplit] ?? 0) * 100).toFixed(1)}%
+                  {(data?.direction_pct?.[dir] ?? 0).toFixed(1)}%
                 </span>
                 <Badge
-                  label={dir === 'downward' ? 'Manager to Report' : dir === 'upward' ? 'Report to Manager' : 'Peer to Peer'}
+                  label={dir === 'Downward' ? 'Manager to Report' : dir === 'Upward' ? 'Report to Manager' : 'Peer to Peer'}
                   color={DIR_COLORS[dir]}
                   dot
                 />
@@ -87,7 +82,7 @@ export function Flow() {
                 Same Function
               </span>
               <span style={{ fontSize: 32, fontWeight: 800, color: PALETTE[2] }}>
-                {((data?.same_function_pct ?? 0) * 100).toFixed(1)}%
+                {(data?.same_function_rate ?? 0).toFixed(1)}%
               </span>
             </div>
           )}
@@ -99,7 +94,7 @@ export function Flow() {
                 Cross Function
               </span>
               <span style={{ fontSize: 32, fontWeight: 800, color: PALETTE[0] }}>
-                {((data?.cross_function_pct ?? 0) * 100).toFixed(1)}%
+                {(data?.cross_function_rate ?? 0).toFixed(1)}%
               </span>
             </div>
           )}
@@ -139,8 +134,8 @@ export function Flow() {
               <div key={from} style={{ display: 'grid', gridTemplateColumns: `120px repeat(${toFuncs.length}, 1fr)`, gap: 2, marginBottom: 2 }}>
                 <span style={{ fontSize: 11, color: '#a1a1aa', padding: '6px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{from}</span>
                 {toFuncs.map(to => {
-                  const cell = heatmap.find(h => h.from_function === from && h.to_function === to);
-                  const val = cell?.count ?? 0;
+                  const cell = heatmap.find(h => h.source === from && h.target === to);
+                  const val = cell?.value ?? 0;
                   const opacity = val / maxCount;
                   return (
                     <div
