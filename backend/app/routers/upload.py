@@ -9,6 +9,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from ..data_loader import get_employees, get_history, is_loaded, load_and_process
+from ..recognition_loader import load_recognition, is_recognition_loaded, get_recognition
 
 router = APIRouter()
 
@@ -52,6 +53,7 @@ async def upload_csv(file: UploadFile = File(...)):
     reload_error = None
     try:
         load_and_process(UPLOAD_DIR)
+        load_recognition(UPLOAD_DIR)
         reload_status = "success"
     except Exception as e:
         reload_error = str(e)
@@ -100,6 +102,18 @@ async def get_status():
         if loaded_at is not None:
             result["loaded_at"] = str(loaded_at)
 
+    # Recognition data status
+    if is_recognition_loaded():
+        try:
+            rdf = get_recognition()
+            result["recognition_count"] = len(rdf)
+            result["recognition_categories"] = int(rdf["category_id"].nunique()) if len(rdf) > 0 else 0
+            result["recognition_subcategories"] = int(rdf["subcategory_id"].nunique()) if len(rdf) > 0 else 0
+            result["unique_recipients"] = int(rdf["recipient_title"].nunique()) if len(rdf) > 0 else 0
+            result["unique_nominators"] = int(rdf["nominator_title"].nunique()) if len(rdf) > 0 else 0
+        except Exception:
+            pass
+
     return result
 
 
@@ -108,6 +122,7 @@ async def reload_data():
     """Re-trigger load_and_process() to refresh all cached data."""
     try:
         load_and_process(UPLOAD_DIR)
+        load_recognition(UPLOAD_DIR)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=404,

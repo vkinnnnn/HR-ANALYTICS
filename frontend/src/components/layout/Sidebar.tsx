@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Search, TreePine, Scale, MessageSquareText,
   ArrowRightLeft, Network, Trophy, ShieldCheck,
   Users, TrendingDown, Briefcase, UserCog,
-  Sparkles, FileText, Activity, Upload, Settings,
+  Sparkles, Upload, Settings,
   ChevronLeft, ChevronRight, User, LogOut, HelpCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -58,9 +58,7 @@ const NAV_GROUPS = [
     color: '#fb7185',
     items: [
       { to: '/insights', icon: Sparkles, label: 'AI Insights' },
-      { to: '/reports', icon: FileText, label: 'Reports' },
-      { to: '/pipeline', icon: Activity, label: 'Pipeline Hub' },
-      { to: '/upload', icon: Upload, label: 'Data Upload' },
+      { to: '/data-hub', icon: Upload, label: 'Data Hub' },
       { to: '/settings', icon: Settings, label: 'Settings' },
     ],
   },

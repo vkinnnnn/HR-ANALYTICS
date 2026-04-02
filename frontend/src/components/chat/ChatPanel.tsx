@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, ArrowUp } from 'lucide-react';
+import { X, ArrowUp, Mic, MicOff } from 'lucide-react';
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, CartesianGrid,
@@ -65,8 +65,36 @@ export function ChatPanel({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Web Speech API for voice input
+  const hasSpeech = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  function toggleVoice() {
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onresult = (e: any) => {
+      const transcript = Array.from(e.results).map((r: any) => r[0].transcript).join('');
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -512,7 +540,24 @@ export function ChatPanel({
 
       {/* ─── Input Bar ─── */}
       <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+          {hasSpeech && (
+            <button
+              onClick={toggleVoice}
+              title={isListening ? 'Stop listening' : 'Voice input'}
+              style={{
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                background: isListening ? 'rgba(251,113,133,0.15)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${isListening ? 'rgba(251,113,133,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                color: isListening ? '#fb7185' : '#52525b',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                animation: isListening ? 'glowPulse 1.5s infinite' : 'none',
+              }}
+            >
+              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+            </button>
+          )}
+          <div style={{ position: 'relative', flex: 1 }}>
           <textarea
             ref={textareaRef}
             value={input}
@@ -557,6 +602,7 @@ export function ChatPanel({
               <ArrowUp size={15} />
             </button>
           )}
+          </div>
         </div>
       </div>
     </div>

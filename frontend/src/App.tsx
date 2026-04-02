@@ -13,6 +13,7 @@ import { Quality } from './pages/Quality';
 import { Flow } from './pages/Flow';
 import { Nominators } from './pages/Nominators';
 import { Fairness } from './pages/Fairness';
+import { DataHub } from './pages/DataHub';
 import { Workforce } from './pages/Workforce';
 import { Turnover } from './pages/Turnover';
 import { Tenure } from './pages/Tenure';
@@ -21,10 +22,7 @@ import { Careers } from './pages/Careers';
 import { Managers } from './pages/Managers';
 import { Org } from './pages/Org';
 import { Insights } from './pages/Insights';
-import { Upload } from './pages/Upload';
-import { Reports } from './pages/Reports';
 import { SettingsPage } from './pages/SettingsPage';
-import { PipelineHub } from './pages/PipelineHub';
 import api from './lib/api';
 
 function AppContent() {
@@ -178,9 +176,10 @@ function AppContent() {
           <Route path="/managers" element={<Managers />} />
           <Route path="/org" element={<Org />} />
           <Route path="/insights" element={<Insights />} />
-          <Route path="/pipeline" element={<PipelineHub />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/reports" element={<Reports />} />
+          <Route path="/data-hub" element={<DataHub />} />
+          <Route path="/pipeline" element={<DataHub />} />
+          <Route path="/upload" element={<DataHub />} />
+          <Route path="/reports" element={<DataHub />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
