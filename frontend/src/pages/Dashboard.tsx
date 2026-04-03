@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -83,6 +84,7 @@ const TableLabel = ({ children }: { children: string }) => (
 
 /* ---------- component ---------- */
 export function Dashboard() {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState<RecSummary | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [nlpQuality, setNlpQuality] = useState<NlpQuality[]>([]);
@@ -186,10 +188,13 @@ export function Dashboard() {
           message={insightText}
           color="#FF8A4C"
           action={
-            <button style={{
-              borderRadius: 9999, background: 'rgba(255,138,76,0.12)', border: '1px solid rgba(255,138,76,0.25)',
-              color: '#FF8A4C', fontSize: 10, fontWeight: 700, padding: '6px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>
+            <button
+              onClick={() => navigate('/categories')}
+              style={{
+                borderRadius: 9999, background: 'rgba(255,138,76,0.12)', border: '1px solid rgba(255,138,76,0.25)',
+                color: '#FF8A4C', fontSize: 10, fontWeight: 700, padding: '6px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
               View Details →
             </button>
           }
