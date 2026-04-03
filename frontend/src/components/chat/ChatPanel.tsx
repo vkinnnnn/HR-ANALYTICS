@@ -124,99 +124,31 @@ export function ChatPanel({
       .slice(-6)
       .map(m => ({ role: m.role, content: m.content }));
 
-    const body = JSON.stringify({
+    const payload = {
       question: trimmed,
       current_page: currentPage,
       conversation_history: history,
-    });
+    };
 
     try {
-      // Try SSE streaming first
-      const baseURL = api.defaults.baseURL || '';
-      const res = await fetch(`${baseURL}/api/chat/query/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      });
-
-      if (!res.ok || !res.body) throw new Error('Stream unavailable');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = '';
-      let finalMeta: any = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.done) {
-              finalMeta = data;
-            } else if (data.token) {
-              accumulated += data.token;
-              setStreamingContent(accumulated);
-            }
-          } catch { /* skip malformed lines */ }
-        }
-      }
-
-      // Finalize the message
-      const answer = accumulated || 'No response.';
-      // Strip SUGGESTIONS: and NAVIGATE: from the streamed text for clean display
-      let cleanAnswer = answer;
-      if (cleanAnswer.includes('SUGGESTIONS:')) {
-        cleanAnswer = cleanAnswer.split('SUGGESTIONS:')[0].trim();
-      }
-      if (cleanAnswer.includes('NAVIGATE:')) {
-        cleanAnswer = cleanAnswer.split('NAVIGATE:')[0].trim();
-      }
-      // Strip chart JSON blocks
-      cleanAnswer = cleanAnswer.replace(/```json[\s\S]*?```/g, '').trim();
-
+      // Use the reliable non-streaming endpoint (always works)
+      const res = await api.post('/api/chat/query', payload);
       const assistantMsg: ChatMessage = {
         role: 'assistant',
-        content: cleanAnswer,
-        chart_data: finalMeta?.chart_data || null,
-        suggestions: finalMeta?.suggestions || null,
-        analysis_type: finalMeta?.analysis_type || null,
+        content: res.data.answer || res.data.text || 'No response.',
+        chart_data: res.data.data || null,
+        suggestions: res.data.suggestions || null,
+        analysis_type: res.data.analysis_type || null,
         timestamp: Date.now(),
       };
-      setStreamingContent(null);
       onSendMessage(assistantMsg);
-      handleNavigation(finalMeta?.navigation);
-
-    } catch {
-      // Fallback to non-streaming endpoint
-      try {
-        const res = await api.post('/api/chat/query', {
-          question: trimmed,
-          current_page: currentPage,
-          conversation_history: history,
-        });
-        const assistantMsg: ChatMessage = {
-          role: 'assistant',
-          content: res.data.answer || res.data.text || 'No response.',
-          chart_data: res.data.data || null,
-          suggestions: res.data.suggestions || null,
-          analysis_type: res.data.analysis_type || null,
-          timestamp: Date.now(),
-        };
-        onSendMessage(assistantMsg);
-        handleNavigation(res.data.navigation);
-      } catch (err: any) {
-        onSendMessage({
-          role: 'assistant',
-          content: err?.response?.data?.detail || 'Sorry, I encountered an error processing your request.',
-          timestamp: Date.now(),
-        });
-      }
+      handleNavigation(res.data.navigation);
+    } catch (err: any) {
+      onSendMessage({
+        role: 'assistant',
+        content: err?.response?.data?.detail || 'Sorry, I encountered an error. Please try again.',
+        timestamp: Date.now(),
+      });
     } finally {
       setIsLoading(false);
       setStreamingContent(null);
