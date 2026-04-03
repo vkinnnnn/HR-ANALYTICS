@@ -243,6 +243,7 @@ function FluidCanvas() {
     window.addEventListener("resize", onResize);
 
     let frame = 0;
+    let frameId = 0;
     const animate = () => {
       frame++;
       uniforms.uTime.value = frame * 0.016;
@@ -261,11 +262,12 @@ function FluidCanvas() {
       fluidTex.needsUpdate = true;
 
       renderer.render(scene, camera);
-      requestAnimationFrame(animate);
+      frameId = requestAnimationFrame(animate);
     };
-    animate();
+    frameId = requestAnimationFrame(animate);
 
     return () => {
+      cancelAnimationFrame(frameId);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);

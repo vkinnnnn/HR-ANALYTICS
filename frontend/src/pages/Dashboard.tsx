@@ -93,32 +93,36 @@ export function Dashboard() {
   const [flowData, setFlowData] = useState<FlowDirection[]>([]);
   const [gradePyramid, setGradePyramid] = useState<{ grade: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [sumRes, catRes, nlpRes, roleRes, nomRes, flowRes] = await Promise.all([
+        setError(null);
+        const results = await Promise.allSettled([
           api.get('/api/recognition/summary'),
           api.get('/api/recognition/categories'),
           api.get('/api/recognition/nlp-quality'),
           api.get('/api/recognition/top-roles'),
           api.get('/api/recognition/nominators'),
           api.get('/api/recognition/flow'),
+          api.get('/api/workforce/grade-pyramid'),
         ]);
-        setSummary(sumRes.data);
-        setCategories((catRes.data?.categories || []).sort((a: Category, b: Category) => b.count - a.count));
-        setNlpQuality(nlpRes.data?.specificity_distribution || []);
-        setTopRoles((roleRes.data?.top_recipients || []).slice(0, 10));
-        setNominators((nomRes.data?.blind_spots || []).slice(0, 10));
-        const dirSplit = flowRes.data?.direction_split || {};
-        setFlowData(Object.entries(dirSplit).map(([d, c]) => ({ direction: d, count: c as number })));
-        // Grade pyramid from workforce API (optional, may fail if no workforce data)
-        try {
-          const gradeRes = await api.get('/api/workforce/grade-pyramid');
-          setGradePyramid((gradeRes.data?.pyramid || gradeRes.data || []).slice(0, 12));
-        } catch { /* workforce data may not be loaded */ }
-      } catch (err) {
-        console.error('Dashboard load error', err);
+        const val = (i: number) => results[i].status === 'fulfilled' ? (results[i] as any).value.data : null;
+        if (val(0)) setSummary(val(0));
+        if (val(1)) setCategories((val(1)?.categories || []).sort((a: Category, b: Category) => b.count - a.count));
+        if (val(2)) setNlpQuality(val(2)?.specificity_distribution || []);
+        if (val(3)) setTopRoles((val(3)?.top_recipients || []).slice(0, 10));
+        if (val(4)) setNominators((val(4)?.blind_spots || []).slice(0, 10));
+        if (val(5)) {
+          const dirSplit = val(5)?.direction_split || {};
+          setFlowData(Object.entries(dirSplit).map(([d, c]) => ({ direction: d, count: c as number })));
+        }
+        if (val(6)) setGradePyramid((val(6)?.pyramid || val(6) || []).slice(0, 12));
+        // Check if all failed
+        if (results.every(r => r.status === 'rejected')) setError('Unable to load data. Check backend connection.');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load dashboard');
       } finally {
         setLoading(false);
       }
@@ -141,6 +145,11 @@ export function Dashboard() {
 
   return (
     <div>
+      {error && (
+        <div style={{ marginBottom: 16, padding: '14px 18px', borderRadius: 12, background: 'rgba(251,113,133,0.06)', border: '1px solid rgba(251,113,133,0.15)', color: '#fb7185', fontSize: 13, fontWeight: 500 }}>
+          {error}
+        </div>
+      )}
       <PageHero
         icon={<LayoutDashboard size={20} />}
         title="Dashboard"

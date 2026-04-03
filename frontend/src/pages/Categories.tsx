@@ -48,7 +48,7 @@ export function Categories() {
         ]);
         setCategories(catRes.data.categories ?? []);
         setHeatmap((fairRes.data.category_bias ?? []).map((c: any) => ({ function: c.function, category: c.category, count: c.count })));
-      } catch {}
+      } catch (err) { console.error('Categories load error', err); }
       setLoading(false);
     })();
   }, []);

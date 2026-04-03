@@ -196,7 +196,7 @@ function AppContent() {
         messages={chatMessages}
         onSendMessage={handleSendMessage}
         onClearChat={handleClearChat}
-        currentPage={location.pathname}
+        currentPage={location.pathname.startsWith('/app') ? location.pathname : `/app${location.pathname}`}
         prefillMessage={prefillMessage}
         onPrefillConsumed={() => setPrefillMessage(null)}
         onNavigate={navigate}

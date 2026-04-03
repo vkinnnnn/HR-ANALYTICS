@@ -96,7 +96,7 @@ export function Sidebar() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/'}
+                end={item.to === '/app'}
                 className={({ isActive }) => cn(
                   'flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] mb-0.5 transition-all duration-200 relative',
                   isActive ? 'bg-subtle' : 'hover:bg-subtle'
