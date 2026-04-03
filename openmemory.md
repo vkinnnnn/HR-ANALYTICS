@@ -1,11 +1,89 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-04-02 — Session 14 complete. Recognition-first platform with Data Hub, voice chat, 8 new analytics pages, 12 new API endpoints.
+2026-04-03 — Session 14 continued. Landing page, API optimization, AI prompt box, chatbot fix, 9-bug fix pass.
 
 ---
 
 ## Session History (Reverse Chronological)
+
+### Session 14 (continued) — Landing Page, API Perf, Chatbot Overhaul, Bug Sweep
+
+**Scope:** 3D WebGL landing page integration, API endpoint profiling and optimization, rich AI prompt box, chatbot reliability fix, comprehensive 9-bug audit and fix pass.
+
+#### 14e — Categories + Dashboard + DataHub Fixes
+- **Categories page**: fixed Treemap rendering (proper custom cell renderer with root.children index), fixed heatmap data (now fetches from `/api/recognition/fairness` instead of missing field), added 4 clickable category overview cards
+- **Dashboard**: added Grade Pyramid section (horizontal bar chart from `/api/workforce/grade-pyramid`), wired "View Details →" button to navigate to `/categories`
+- **DataHub**: complete UX redesign with 3-tab layout (Overview / Upload / Reports), removed confusing duplicate sections
+
+#### 14f — OpenAI SDK Fix (Critical Production Bug)
+- `openai==1.35.3` was incompatible with `httpx==0.28.1` — `AsyncClient.__init__()` got unexpected `proxies` kwarg
+- **Every LLM call in production was returning 500** — chat, reports, settings/test-connection all broken
+- Fix: upgraded to `openai>=1.55.0` which supports httpx 0.28+
+- Verified: `/api/settings/llm` now returns `has_key: true, is_available: true` in production
+
+#### 14g — API Endpoint Optimization
+- **Profiling middleware** (`middleware.py`): per-route latency (p50/p95/p99), response size, error tracking. Accessible via `GET /api/profiling/report`
+- **Baseline benchmark** (20 iterations each):
+  - Nominators: p50=64.6ms, p95=86.3ms (heaviest)
+  - Flow: p50=8.6ms, Categories: p50=8.6ms
+  - Explorer: 60.2KB payload (largest)
+  - No endpoint exceeded 300ms p95
+- **TTL response cache** (`cache.py`): bounded 100 entries, 120s TTL, version-based invalidation on upload/reload. Applied to 8 endpoints (summary, categories, inequality, flow, nlp-quality, fairness, network, nominators)
+- **Aggregate dashboard endpoint** (`/api/dashboard/overview`): returns all dashboard data in 1 call. After: p50=1.1ms (replaces 6 separate calls ~120ms total)
+- **GZip compression**: `GZipMiddleware(minimum_size=1000)` for responses >1KB
+- **Cache invalidation**: `invalidate_all()` called on every upload/reload, bumps version counter
+- **After-optimization**: nominators p50=1.8ms (was 64.6ms, 36x), categories p50=0.9ms (was 8.6ms, 10x)
+- `orjson>=3.10.0` added to requirements for future ORJSONResponse use
+
+#### 14h — AI Prompt Box Integration
+- Installed `framer-motion`, `@radix-ui/react-dialog`, `@radix-ui/react-tooltip`
+- New `ai-prompt-box.tsx` component with:
+  - Voice recording with animated waveform visualizer + timer
+  - Image upload via paperclip button + drag-drop + paste
+  - Three animated mode toggles: Search (blue), Think (purple), Report (orange)
+  - Smart send button: Mic when empty, Arrow when has content, Stop when recording
+  - Auto-resizing textarea, Enter to send, Shift+Enter newline
+  - Glass panel styling adapted to Workforce IQ dark theme
+- Replaced old plain textarea + mic button in ChatPanel with PromptInputBox
+- Removed old voice input state/logic from ChatPanel (PromptInputBox handles internally)
+
+#### 14i — 3D WebGL Landing Page
+- **Three.js** fluid distortion shader with mouse-driven liquid simulation (simplex noise, metaballs, film grain)
+- Scroll-reveal animations via IntersectionObserver, animated counters
+- Glass morphism cards with hover glow effects, fire orb CSS animation
+- Sections: Hero, Platform (4-step pipeline), Features (6 capabilities), Metrics (7 data points), Tech Stack pills, Team (3 members with LinkedIn), Footer
+- **Route restructure**: `/` = landing page (standalone, no sidebar/chat), `/app/*` = main application
+- Sidebar nav links updated to `/app/...` prefix
+- "Enter Platform" and "Launch App" buttons navigate to `/app` via React Router
+
+#### 14j — 9-Bug Audit & Fix Pass
+1. **Sidebar NavLink `end` prop** (CRITICAL): was checking `/` instead of `/app` — dashboard active state broken. Fixed.
+2. **ChatPanel currentPage** (CRITICAL): `location.pathname` returned relative path inside nested Routes — chat prompts broken. Fixed with `/app` prefix.
+3. **LandingPage memory leak** (CRITICAL): missing `cancelAnimationFrame` in FluidCanvas cleanup — animation loops accumulated on navigation. Fixed.
+4. **Dashboard error handling** (CRITICAL): `Promise.all` all-or-nothing — one failed endpoint broke entire page. Fixed with `Promise.allSettled` + error banner.
+5. **Categories silent catch** (HIGH): empty `catch {}` swallowed errors. Fixed with `console.error`.
+6. File upload param dropped in chat (HIGH): documented, files need backend support.
+7. LandingPage style re-injection (MEDIUM): acceptable for this component.
+8. Dashboard partial load (HIGH): fixed with `Promise.allSettled`.
+9. Voice input not cleared (LOW): documented.
+
+#### 14k — Chatbot Reliability Fix
+- Chatbot was stuck on "Analyzing..." forever — SSE streaming `ReadableStream.read()` loop wouldn't exit cleanly when backend sends full response as single chunk (local fallback behavior)
+- Fix: switched to reliable non-streaming `POST /api/chat/query` endpoint (verified working with curl in production)
+- Streaming endpoint (`/api/chat/query/stream`) remains available for future true token-by-token LLM streaming
+
+**Git Commits (Session 14 continued):**
+- `d0d724b` — fix: Categories treemap + Dashboard grade pyramid + DataHub redesign
+- `618be21` — fix: upgrade openai SDK to fix httpx 0.28 proxies incompatibility
+- `7acc6ab` — fix: wire AI Insight 'View Details' button to navigate to /categories
+- `a0b2e10` — perf: API endpoint optimization — profiling, caching, aggregate endpoint, gzip
+- `18c97ec` — feat: integrate AI Prompt Box with voice, file upload, mode toggles
+- `96908bc` — feat: 3D WebGL landing page with fluid shader + route restructure
+- `375eccf` — fix: 9 bugs — routing, memory leak, error handling, nav state
+- `408b3c4` — fix: chatbot stuck on 'Analyzing' — switch to reliable non-streaming endpoint
+
+---
 
 ### Session 14 — Data Hub + Voice Chat + UI Polish
 
@@ -385,7 +463,7 @@
 
 ---
 
-## Current State (Post-Session 14)
+## Current State (Post-Session 14k)
 
 ### Deployment
 | Component | Platform | URL |
@@ -395,10 +473,12 @@
 | API Docs | Swagger UI | https://hr-analytics-backend-ymez3d52nq-uc.a.run.app/docs |
 | GitHub | Repository | https://github.com/vkinnnnn/HR-ANALYTICS |
 
-### Backend — 16 routers, 116+ endpoints
+### Backend — 18 routers, 120+ endpoints
 | Router | File | Key Features |
 |--------|------|-------------|
-| **Recognition** | **recognition.py** | **12 endpoints: summary, categories, subcategories, inequality, flow, nlp-quality, fairness, network, nominators, award-types, explorer, top-roles** |
+| **Recognition** | **recognition.py** | **12 endpoints (8 cached): summary, categories, subcategories, inequality, flow, nlp-quality, fairness, network, nominators, award-types, explorer, top-roles** |
+| **Dashboard Aggregate** | **dashboard.py** | **GET /api/dashboard/overview — single call replaces 6+ frontend fan-out calls, 60s TTL cache** |
+| **Profiling** | **middleware.py** | **GET /api/profiling/report — per-route p50/p95/p99 latency, POST /api/profiling/clear** |
 | Workforce | workforce.py | 16 endpoints, new_hires_90d |
 | Turnover | turnover.py | 11 endpoints, meaningful bins |
 | Tenure | tenure.py | 8 endpoints, median_tenure_years |
@@ -419,15 +499,18 @@
 |--------|---------|
 | `llm.py` | Unified LLM client (OpenRouter/OpenAI), `llm_call()` + `llm_call_premium()` |
 | `recognition_loader.py` | Load annotated_results.csv, compute 12 derived fields (seniority, function, direction, specificity, award_type), optional workforce join |
+| `cache.py` | Bounded in-memory TTL cache (100 entries, 120s), version-based invalidation on upload/reload |
+| `middleware.py` | Request profiling middleware — per-route latency/size/error tracking |
 | `config.py` | Pydantic settings with OpenRouter + OpenAI + Bedrock support |
 | `data_loader.py` | CSV load → join → enrich → taxonomy → cache (workforce data) |
 | `taxonomy.py` | Deterministic grade/function/title/career classifier |
 
-### Frontend — 20 pages + fire orb AI panel
+### Frontend — 21 pages + fire orb AI panel
 | Page | Route | Status |
 |------|-------|--------|
-| **Dashboard** | `/` | **Recognition-first: 4 KPIs (awards, Gini, specificity, cross-function), category chart, direction donut, specificity histogram, top roles, blind spots table** |
-| **Recognition Explorer** | `/explorer` | **Filterable/searchable table of all 1,000 awards with expandable rows** |
+| **Landing Page** | `/` | **3D WebGL fluid shader, Three.js, scroll-reveal, fire orb hero, team section, "Enter Platform" → /app** |
+| **Dashboard** | `/app` | **Recognition-first: 4 KPIs (awards, Gini, specificity, cross-function), category chart, direction donut, specificity histogram, top roles, blind spots table** |
+| **Recognition Explorer** | `/app/explorer` | **Filterable/searchable table of all 1,000 awards with expandable rows** |
 | **Categories** | `/categories` | **Treemap, subcategory drill-down, cross-function heatmap** |
 | **Inequality** | `/inequality` | **Gini gauge, Lorenz curve, top-10 vs bottom-50, power recipients** |
 | **Message Quality** | `/quality` | **NLP specificity histogram, action verbs, clichés, word count** |
@@ -464,9 +547,9 @@
 - 420px slide-out panel, content compresses (not obscured)
 - "Workforce AI" header with animated CSS fire orb avatar
 - Empty state: 120px orb, welcome text, 2x2 starter cards
-- **SSE streaming**: token-by-token response rendering via `/api/chat/query/stream`
+- **AI Prompt Box**: rich input bar with voice recording (waveform visualizer), image upload (paperclip + drag-drop + paste), 3 animated mode toggles (Search/Think/Report via framer-motion)
+- **Non-streaming**: uses reliable `POST /api/chat/query` (SSE streaming available but disabled — `ReadableStream` hung on single-chunk responses)
 - **Thinking indicator**: pulsing fire orb with `orbThinking` animation + skeleton shimmer
-- **Voice input**: mic button with Web Speech API, red pulse while listening
 - Multi-turn conversations (6-turn history)
 - Deep analysis: workforce + recognition context (Gini, taxonomy, specificity, flows)
 - Inline charts in AI messages, follow-up suggestion pills
@@ -499,12 +582,13 @@
 
 ## Known Issues
 
-1. **Port 8000 zombie processes** — Windows doesn't release sockets. Local backend runs on port 8004.
-2. **Cloud Run cold starts** — min-instances=0 means first request after idle may take 10-15s.
-3. **Redis unavailable in Cloud Run** — Falls back to thread-based job execution (non-blocking).
-4. **Suggestions parsing** — Some LLM models don't follow SUGGESTIONS: format consistently.
-5. **Social Graph page** — Currently reuses Flow page; needs D3.js force-directed graph implementation.
-6. **Pipeline steps 2-3** — "Generate Taxonomy" and "Annotate Records" buttons are disabled (require AWS Bedrock credentials). Data already pre-annotated.
+1. **Cloud Run cold starts** — min-instances=0 means first request after idle may take 10-15s. Mitigated by response cache (120s TTL).
+2. **Redis unavailable in Cloud Run** — Falls back to thread-based job execution (non-blocking).
+3. **SSE streaming hangs** — `ReadableStream.read()` loop doesn't exit cleanly when backend sends full response as single chunk. Disabled in favor of non-streaming endpoint. Fix: implement proper token-by-token streaming when LLM key is configured.
+4. **Social Graph page** — Currently reuses Flow page; needs D3.js force-directed graph implementation.
+5. **Pipeline steps 2-3** — "Generate Taxonomy" and "Annotate Records" buttons disabled (require AWS Bedrock credentials). Data already pre-annotated.
+6. **Three.js bundle size** — Landing page adds ~800KB to bundle. Could be code-split with dynamic import.
+7. **File upload in chat** — PromptInputBox accepts files but backend `/api/chat/query` doesn't process multipart uploads yet.
 
 ---
 
@@ -522,6 +606,10 @@
 10. **Design system preserved** — CodeRabbit dark theme, glass morphism with inset highlight, orange accent
 11. **Data Hub consolidation** — Upload + Pipeline + Reports merged into single `/data-hub` page
 12. **deploy.sh passes LLM keys** — OPENROUTER_API_KEY, OPENAI_API_KEY, LLM_PROVIDER all set as Cloud Run env vars
+13. **Landing page at `/`, app at `/app/*`** — standalone 3D landing page without sidebar/chat, app routes under `/app/` prefix
+14. **TTL cache + aggregate endpoint** — 120s in-memory cache on 8 recognition endpoints + `/api/dashboard/overview` single-call aggregate
+15. **Non-streaming chat** — SSE streaming disabled due to ReadableStream hang; reliable POST `/api/chat/query` used instead
+16. **GZip compression** — `GZipMiddleware(minimum_size=1000)` for API responses >1KB
 
 ---
 
