@@ -1,11 +1,135 @@
 # HR Workforce Analytics Platform — Session Memory
 
 ## Last Updated
-2026-03-28 — Session 12 complete. Full production deployment to GCP.
+2026-04-02 — Session 14 complete. Recognition-first platform with Data Hub, voice chat, 8 new analytics pages, 12 new API endpoints.
 
 ---
 
 ## Session History (Reverse Chronological)
+
+### Session 14 — Data Hub + Voice Chat + UI Polish
+
+**Scope:** Merge Upload/Pipeline/Reports into unified Data Hub, add voice input to chat, glass panel enhancements.
+
+#### 14a — Data Hub Page (`/data-hub`)
+- New unified page replacing 3 separate pages (Upload, Pipeline Hub, Reports)
+- **Upload panel**: drag-drop CSV with file preview chip, auto-reload on success
+- **Data Status panel**: recognition stats (awards, categories, recipients, nominators) + workforce stats (employees, active, departed)
+- **Pipeline Stepper**: 4-step visual workflow (Upload → Taxonomy → Annotate → Compute) with status badges
+- **Reports section**: inline intelligence report rendering + export data package download
+- Old routes `/upload`, `/pipeline`, `/reports` redirect to `/data-hub`
+- Backend: `upload.py` now reloads recognition data alongside workforce data, status endpoint includes recognition stats
+
+#### 14b — Chat Voice Input (Web Speech API)
+- Mic button in chat input bar using `SpeechRecognition` / `webkitSpeechRecognition`
+- Red pulse animation (`glowPulse`) while actively listening
+- Live transcription populates textarea in real-time
+- Feature-detect: mic button hidden in browsers without support (Firefox)
+- `MicOff` icon shown during active recording for clear stop affordance
+
+#### 14c — UI Polish
+- **Glass panels enhanced**: added `inset 0 1px 0 rgba(255,255,255,0.06)` top-edge highlight + `:hover { border-color: rgba(255,255,255,0.15) }` glow transition
+- **EmptyState component**: new reusable component with icon, title, message, and CTA button linking to `/data-hub`
+- **Sidebar consolidated**: removed separate "Reports", "Pipeline Hub", "Data Upload" nav items → single "Data Hub" entry under Intelligence
+
+#### 14d — Sidebar Update
+- Intelligence group: AI Insights, Data Hub, Settings (was: AI Insights, Reports, Pipeline Hub, Data Upload, Settings)
+- Removed unused `FileText`, `Activity` icon imports
+
+**Git Commits (Session 14):**
+- `e84e59b` — feat(s14): Data Hub, voice input, glass panels, sidebar cleanup
+
+---
+
+### Session 13 — Recognition Intelligence Platform Pivot (MAJOR)
+
+**Scope:** Complete platform pivot from workforce-only to recognition-first analytics. Added Workhuman recognition awards data as primary dataset, built 12 new API endpoints, 8 new frontend pages, redesigned dashboard and navigation.
+
+#### 13a — Root Cause Fixes (Pre-Pivot)
+- **chat.py**: fixed missing `get_current_managers` import — manager retention analysis was silently failing on every query
+- **chat.py**: fixed non-existent `_compute_flight_risk` import → created new `compute_flight_risk_sync()` helper in predictions.py
+- **chat.py**: broadened exception handling — any LLM failure now gracefully falls back to local response instead of 502
+- **deploy.sh**: **ROOT CAUSE FIX** — LLM API keys (OPENROUTER/OPENAI) were NOT being passed to Cloud Run, causing all AI features to return generic local responses in production
+- **reports.py**: added Manager Effectiveness + Flight Risk Analysis sections (6 total, was 4), enriched narratives with benchmark comparisons, richer LLM prompt, 3-paragraph local fallback
+
+#### 13b — UX Refactor
+- **Chat SSE Streaming**: new `POST /api/chat/query/stream` endpoint with token-by-token streaming via `AsyncOpenAI(stream=True)`. Frontend uses `fetch` + `ReadableStream` consumer. Fallback to existing `/query` endpoint if streaming fails.
+- **Thinking Indicator**: fire orb with pulsing `orbThinking` glow + skeleton shimmer lines, transitions to streaming text on first token (replaces bouncing dots)
+- **Keyboard Shortcuts**: `Ctrl+K` / `Cmd+K` toggles chat panel, `Esc` closes it
+- **Toast System**: new `Toast.tsx` with React context — glass-panel aesthetic, 4 types (success/error/info/warning), bottom-left position, 4s auto-dismiss
+- **Chat Persistence**: messages saved to `sessionStorage` (debounced 500ms), survive page refresh
+- **Settings API Key Management**: `POST /api/settings/api-key` + `POST /api/settings/test-connection` endpoints. Frontend: password input with show/hide toggle, "Save Key" button, "Test Connection" with latency display
+- **Visual**: headcount trend chart changed from teal to brand orange (#FF8A4C), sidebar logo replaced Activity icon with animated CSS fire-orb
+
+#### 13c — Recognition Data Foundation
+- Copied `annotated_results.csv` (1,000 rows, 8 cols) + `mockup_awards.csv` (1,000 rows, 4 cols) from `backend/Dataset_real/` to `backend/wh_Dataset/`
+- **New `recognition_loader.py`**: loads annotated_results.csv, computes 12 derived fields per record:
+  - `recipient_seniority` / `nominator_seniority` (11 levels: Entry → Executive)
+  - `recipient_function` / `nominator_function` (11 categories inferred from job titles)
+  - `direction` (Downward / Upward / Lateral based on seniority comparison)
+  - `same_function` (boolean)
+  - `specificity` (NLP score 0–1: numbers +0.3, action verbs +0.15 each, length bonuses, cliché penalties)
+  - `award_type` (11 types: Thank You, Periodic/Annual, Launch/Delivery, etc.)
+  - `word_count`, `action_verb_count`, `has_numbers`, `cliche_count`
+  - `specificity_band` (5 bands: Very Vague → Highly Specific)
+  - Optional join with `function_wh.csv` for department/grade/country enrichment (99% join rate via job_title)
+- **New `/api/recognition` router** (12 endpoints):
+  - `/summary` — total_awards, gini, avg_specificity, cross_function_rate, direction_split
+  - `/categories` — 4 categories with subcategory breakdowns
+  - `/subcategories` — filterable by category_id
+  - `/inequality` — Gini coefficient, Lorenz curve (20 points), top-10/bottom-50 share, power recipients
+  - `/flow` — direction split, cross-function heatmap, seniority flow, reciprocal pairs
+  - `/nlp-quality` — specificity distribution, action verb rate, cliché rate, word count stats
+  - `/fairness` — specificity by function and seniority with below-avg flags
+  - `/network` — nodes (200 roles), edges (300 connections), density
+  - `/nominators` — leaderboard (composite score: volume 30% + specificity 35% + diversity 25% + breadth 10%), blind spots, coaching candidates
+  - `/award-types` — distribution + cross-tab with categories
+  - `/explorer` — filtered, paginated, searchable list of all awards
+  - `/top-roles` — top 15 recipients and nominators by count
+- **Chat context updated**: system prompt now includes full recognition taxonomy, Gini, specificity, cross-function rates, key insights alongside workforce data
+- Auto-loads recognition data on startup via lifespan handler
+
+#### 13d — Frontend Redesign
+- **Sidebar restructured** (6 groups):
+  - Overview (orange): Dashboard, Recognition Explorer
+  - Analytics (purple): Categories, Inequality, Message Quality
+  - Network (blue): Recognition Flow, Social Graph
+  - People (emerald): Nominators, Fairness Audit
+  - Workforce (amber): Workforce, Turnover, Careers, Managers
+  - Intelligence (rose): AI Insights, Reports, Pipeline Hub, Data Upload, Settings
+- **Dashboard redesigned** for recognition-first:
+  - 4 KPIs: Total Awards (orange), Recognition Gini (purple), Avg Specificity (rose), Cross-Function Rate (emerald)
+  - AI Insight Banner: data-driven text from dominant/smallest category
+  - Category Distribution horizontal bar chart (4 bars)
+  - Recognition Direction donut chart (Downward/Upward/Lateral)
+  - Specificity Distribution histogram (5 bands, rose→emerald)
+  - Top 10 Most Recognized Roles horizontal bar chart
+  - Blind Spot Nominators table (CSS Grid)
+- **7 new analytics pages**:
+  - `RecognitionExplorer.tsx` (`/explorer`) — filterable/searchable table of all 1,000 awards with expandable rows
+  - `Categories.tsx` (`/categories`) — Recharts Treemap, subcategory drill-down, cross-function heatmap
+  - `Inequality.tsx` (`/inequality`) — Gini gauge, Lorenz curve (ComposedChart), top-10 vs bottom-50 cards, power recipients bar chart
+  - `Quality.tsx` (`/quality`) — 4 KPI cards, specificity histogram, word count stats
+  - `Flow.tsx` (`/flow`) — 3 direction KPIs, cross-function heatmap (CSS Grid with opacity-scaled cells), same/cross comparison, reciprocal pairs
+  - `Nominators.tsx` (`/nominators`) — leaderboard table with composite scores, coaching candidates section
+  - `Fairness.tsx` (`/fairness`) — grouped bar charts by function and seniority with reference lines, below-avg rose highlighting
+
+#### 13e — Frontend-API Alignment Fix
+- Fixed field name mismatches in all 6 new pages:
+  - Inequality: `top_10_pct_share→top_10_share`, `population_pct/recognition_pct→x/y`, `top_recipients→power_recipients`
+  - Quality: `specificity_bands→specificity_distribution`
+  - Flow: direction keys capitalized, heatmap `from_function/to_function/count→source/target/value`, rates not multiplied by 100
+  - Fairness: transform API `function/seniority` → unified `name` field on load
+  - Nominators: `total_awards→total`
+  - RecognitionExplorer: use index instead of non-existent `id`, fix `recipient/nominator→recipient_title/nominator_title`, `results→awards`
+
+**Git Commits (Session 13):**
+- `bd056e1` — fix: root cause fixes for AI features + deploy pipeline + report engine
+- `4df4100` — feat: comprehensive UX refactor — streaming chat, toast system, settings API keys
+- `46088cd` — feat: recognition-first platform pivot — new data engine, 8 new pages, 12 API endpoints
+- `fdd22fa` — fix: align all frontend pages with actual API response field names
+
+---
 
 ### Session 12 — Production Deployment (GCP Cloud Run + Firebase Hosting)
 
@@ -261,7 +385,7 @@
 
 ---
 
-## Current State (Post-Session 12)
+## Current State (Post-Session 14)
 
 ### Deployment
 | Component | Platform | URL |
@@ -271,20 +395,21 @@
 | API Docs | Swagger UI | https://hr-analytics-backend-ymez3d52nq-uc.a.run.app/docs |
 | GitHub | Repository | https://github.com/vkinnnnn/HR-ANALYTICS |
 
-### Backend — 14 routers, 90+ endpoints
+### Backend — 16 routers, 116+ endpoints
 | Router | File | Key Features |
 |--------|------|-------------|
+| **Recognition** | **recognition.py** | **12 endpoints: summary, categories, subcategories, inequality, flow, nlp-quality, fairness, network, nominators, award-types, explorer, top-roles** |
 | Workforce | workforce.py | 16 endpoints, new_hires_90d |
 | Turnover | turnover.py | 11 endpoints, meaningful bins |
 | Tenure | tenure.py | 8 endpoints, median_tenure_years |
 | Careers | careers.py | 6 endpoints |
 | Managers | managers.py | 6 endpoints |
 | Org | org.py | 6 endpoints |
-| Predictions | predictions.py | 4 endpoints (flight risk ML) |
-| Chat | chat.py | Deep analysis engine, multi-turn, 16 data sections |
-| Reports | reports.py | GPT-4o premium + local fallback |
-| Upload | upload.py | 3 endpoints |
-| **Settings** | **settings.py** | **GET/POST LLM config, runtime model switching** |
+| Predictions | predictions.py | 4 endpoints + `compute_flight_risk_sync()` helper |
+| Chat | chat.py | Deep analysis engine, multi-turn, SSE streaming, recognition + workforce context |
+| Reports | reports.py | 6 sections (Manager Effectiveness, Flight Risk), GPT-4o premium + rich local fallback |
+| Upload | upload.py | 3 endpoints, reloads recognition + workforce data |
+| Settings | settings.py | GET/POST LLM config, API key management, test connection |
 | Taxonomy | taxonomy_router.py | 6 endpoints |
 | Pipeline | pipeline_router.py | 11 endpoints |
 | WebSocket | ws.py | 2 WS endpoints |
@@ -293,14 +418,24 @@
 | Module | Purpose |
 |--------|---------|
 | `llm.py` | Unified LLM client (OpenRouter/OpenAI), `llm_call()` + `llm_call_premium()` |
+| `recognition_loader.py` | Load annotated_results.csv, compute 12 derived fields (seniority, function, direction, specificity, award_type), optional workforce join |
 | `config.py` | Pydantic settings with OpenRouter + OpenAI + Bedrock support |
-| `data_loader.py` | CSV load → join → enrich → taxonomy → cache |
+| `data_loader.py` | CSV load → join → enrich → taxonomy → cache (workforce data) |
 | `taxonomy.py` | Deterministic grade/function/title/career classifier |
 
-### Frontend — 13 pages + fire orb AI panel
+### Frontend — 20 pages + fire orb AI panel
 | Page | Route | Status |
 |------|-------|--------|
-| Dashboard | `/` | Full redesign: 4 KPIs, insight banner, two-color turnover, glass panels |
+| **Dashboard** | `/` | **Recognition-first: 4 KPIs (awards, Gini, specificity, cross-function), category chart, direction donut, specificity histogram, top roles, blind spots table** |
+| **Recognition Explorer** | `/explorer` | **Filterable/searchable table of all 1,000 awards with expandable rows** |
+| **Categories** | `/categories` | **Treemap, subcategory drill-down, cross-function heatmap** |
+| **Inequality** | `/inequality` | **Gini gauge, Lorenz curve, top-10 vs bottom-50, power recipients** |
+| **Message Quality** | `/quality` | **NLP specificity histogram, action verbs, clichés, word count** |
+| **Recognition Flow** | `/flow` | **Direction KPIs, cross-function heatmap, reciprocal pairs** |
+| **Social Graph** | `/network` | **Force-directed (reuses Flow page currently)** |
+| **Nominators** | `/nominators` | **Leaderboard with composite scores, blind spots, coaching candidates** |
+| **Fairness Audit** | `/fairness` | **Specificity by function + seniority, below-avg highlighting** |
+| **Data Hub** | `/data-hub` | **Unified: upload + pipeline stepper + reports + export (replaces Upload, Pipeline, Reports)** |
 | Workforce | `/workforce` | 8 dimension tabs |
 | Turnover | `/turnover` | Rates + trend + danger zones |
 | Tenure | `/tenure` | Cohorts + retention curve |
@@ -309,32 +444,48 @@
 | Managers | `/managers` | Span + retention + revolving doors |
 | Org Structure | `/org` | Dept sizes + growth + restructuring |
 | AI Insights | `/insights` | Taxonomy charts |
-| Pipeline Hub | `/pipeline` | Launch/monitor/cancel |
-| Upload | `/upload` | Drag-drop CSV |
-| Reports | `/reports` | LLM summary + export ZIP |
-| **Settings** | `/settings` | **Live LLM provider/model picker** |
-| ~~AI Chatbot~~ | ~~`/chat`~~ | **REMOVED — replaced by fire orb side panel** |
+| Settings | `/settings` | LLM provider/model picker, API key input + test connection |
+| ~~Upload~~ | ~~`/upload`~~ | **Redirects to /data-hub** |
+| ~~Pipeline Hub~~ | ~~`/pipeline`~~ | **Redirects to /data-hub** |
+| ~~Reports~~ | ~~`/reports`~~ | **Redirects to /data-hub** |
+
+### Sidebar Navigation (6 groups)
+| Group | Color | Items |
+|-------|-------|-------|
+| Overview | #FF8A4C (orange) | Dashboard, Recognition Explorer |
+| Analytics | #a78bfa (purple) | Categories, Inequality, Message Quality |
+| Network | #60a5fa (blue) | Recognition Flow, Social Graph |
+| People | #34d399 (emerald) | Nominators, Fairness Audit |
+| Workforce | #fbbf24 (amber) | Workforce, Turnover, Careers, Managers |
+| Intelligence | #fb7185 (rose) | AI Insights, Data Hub, Settings |
 
 ### AI Assistant (Fire Orb)
 - Fire orb trigger: 56px circle, bottom-right, glow pulse animation
 - 420px slide-out panel, content compresses (not obscured)
-- "Workforce AI" header with dynamic model badge
+- "Workforce AI" header with animated CSS fire orb avatar
 - Empty state: 120px orb, welcome text, 2x2 starter cards
+- **SSE streaming**: token-by-token response rendering via `/api/chat/query/stream`
+- **Thinking indicator**: pulsing fire orb with `orbThinking` animation + skeleton shimmer
+- **Voice input**: mic button with Web Speech API, red pulse while listening
 - Multi-turn conversations (6-turn history)
-- Deep analysis: 16 data sections, benchmarking, root cause, cohort, correlations
-- Inline charts in AI messages
-- Follow-up suggestion pills
+- Deep analysis: workforce + recognition context (Gini, taxonomy, specificity, flows)
+- Inline charts in AI messages, follow-up suggestion pills
 - Proactive anomaly detection on app load
-- Chart-click → auto-ask integration
-- Escape to close, chat persists across navigation
+- Navigation agent: AI can navigate user to pages + highlight sections
+- **Keyboard shortcuts**: Cmd+K / Ctrl+K toggle, Esc close
+- **Persistence**: messages survive page refresh (sessionStorage)
+- **Toast notifications**: glass-panel toasts for all feedback (success/error/info/warning)
+- Graceful fallback: any LLM failure → local data-driven response (never 502)
 
 ### LLM Configuration
 | Feature | Provider | Model |
 |---------|----------|-------|
 | Chat | OpenRouter (default) | nvidia/nemotron-3-super-120b-a12b:free |
+| Chat Streaming | Same as chat | SSE via `/api/chat/query/stream` |
 | Reports | OpenAI (always) | gpt-4o |
 | Fallback | Local | Data-driven pattern matching |
 | Switching | Settings page | Runtime, no restart needed |
+| API Key Management | Settings page | Save key + test connection with latency |
 
 ### MCP Ecosystem
 | Server | Purpose | Status |
@@ -343,57 +494,86 @@
 | Context7 | Library docs lookup | Active |
 | GitHub | Issues/PRs/commits | Active |
 | Figma | Design validation | Installed (needs OAuth) |
-| ~~Stitch~~ | ~~Google Gemini~~ | **Removed** (missing API key) |
 
 ---
 
 ## Known Issues
 
 1. **Port 8000 zombie processes** — Windows doesn't release sockets. Local backend runs on port 8004.
-2. **new_hires_90d = 0** — Dataset is historical, no hires in last 90 days. Correct behavior.
-3. **Suggestions parsing** — Some models don't follow SUGGESTIONS: format consistently.
-4. **Cloud Run cold starts** — min-instances=0 means first request after idle may take 10-15s.
-5. **Redis unavailable in Cloud Run** — Falls back to thread-based job execution (non-blocking).
+2. **Cloud Run cold starts** — min-instances=0 means first request after idle may take 10-15s.
+3. **Redis unavailable in Cloud Run** — Falls back to thread-based job execution (non-blocking).
+4. **Suggestions parsing** — Some LLM models don't follow SUGGESTIONS: format consistently.
+5. **Social Graph page** — Currently reuses Flow page; needs D3.js force-directed graph implementation.
+6. **Pipeline steps 2-3** — "Generate Taxonomy" and "Annotate Records" buttons are disabled (require AWS Bedrock credentials). Data already pre-annotated.
 
 ---
 
 ## Architecture Decisions
 
-1. **Workforce, not recognition** — permanent pivot from Session 1
+1. **Recognition-first, workforce-secondary** — pivoted in Session 13 from workforce-only to recognition awards as primary dataset
 2. **CSV → pandas → in-memory cache** — no SQL for analytics, SQLite only for pipeline metadata
 3. **Unified LLM client** — `llm.py` is single source of truth for all LLM calls
 4. **OpenRouter default** — free tier for chat, OpenAI GPT-4o for premium reports
 5. **Fire orb, not page** — AI assistant is always-present side panel, not a navigation destination
-6. **Deep context, not RAG** — pre-compute 16 data sections per query, no vector search needed
+6. **Deep context, not RAG** — pre-compute recognition + workforce data sections per query, no vector search needed
 7. **Multi-turn via history** — send last 6 turns in API call, not server-side session storage
 8. **Local fallback everywhere** — chat, reports, pipeline all work without API keys
-9. **Deterministic taxonomy** — rule-based, not LLM-dependent
-10. **Design system preserved** — CodeRabbit dark theme, glass morphism, orange accent
+9. **Derived fields at load time** — seniority, function, direction, specificity all computed on startup, not per-request
+10. **Design system preserved** — CodeRabbit dark theme, glass morphism with inset highlight, orange accent
+11. **Data Hub consolidation** — Upload + Pipeline + Reports merged into single `/data-hub` page
+12. **deploy.sh passes LLM keys** — OPENROUTER_API_KEY, OPENAI_API_KEY, LLM_PROVIDER all set as Cloud Run env vars
 
 ---
 
 ## Data Understanding
 
-### Dataset (Workhuman workforce data)
+### Primary Dataset: Recognition Awards (Workhuman sponsor data)
+| File | Rows | Key Columns |
+|------|------|-------------|
+| annotated_results.csv | 1,000 | message, award_title, recipient_title, nominator_title, category_id, category_name, subcategory_id, subcategory_name |
+| mockup_awards.csv | 1,000 | message, award_title, recipient_title, nominator_title |
+
+### Recognition Key Stats
+- Total awards: 1,000 | Unique recipients: 314 | Unique nominators: 255 | Total unique roles: 371
+- Gini coefficient: 0.463 (moderate recognition inequality)
+- Avg specificity: 0.254/1.0 (low — most messages are vague praise)
+- Cross-function rate: 42.9%
+- Direction: Lateral 408 (40.8%), Downward 376 (37.6%), Upward 216 (21.6%)
+- Categories: D (Organizational & Team Enablement) 494, B (Operational Excellence) 298, A (Strategic Business) 160, C (Creative & Brand) 48
+- 25 subcategories, 926 unique award titles
+- 69.6% of messages contain zero action verbs
+
+### Derived Fields (computed at startup)
+| Field | Source | Logic |
+|-------|--------|-------|
+| recipient_seniority | recipient_title | 11 levels: Entry → IC → Senior IC → Principal/Staff → Team Lead → Manager → Sr Manager → Director → Sr Director → Executive |
+| recipient_function | recipient_title | 11 categories: Engineering & Technology, Customer Service, Product & Design, etc. |
+| direction | nominator vs recipient seniority | Downward (mgr→IC), Upward (IC→mgr), Lateral (same tier) |
+| specificity | message NLP | 0–1 score: numbers +0.3, action verbs +0.15, length +0.1, cliché penalty -0.15 |
+| award_type | award_title | 11 types: Thank You, Periodic/Annual, Launch/Delivery, etc. |
+| specificity_band | specificity | 5 bands: Very Vague, Vague, Moderate, Specific, Highly Specific |
+
+### Secondary Dataset: Workforce Lifecycle
 | File | Rows | Key Columns |
 |------|------|-------------|
 | function_wh.csv | 2,466 | PK_PERSON, Hire, Expire, job_title, grade_title, function_title, department_name, country |
 | wh_history_full.csv | 11,803 | pk_user, fk_direct_manager, job_title, effective_start_date, effective_end_date |
 | wh_user_history_v2.csv | 100 | pk_user, fk_direct_manager, job_title, position_title, dates |
 
-### Key Stats
+### Workforce Key Stats
 - Total: 2,466 | Active: 1,110 (45%) | Departed: 1,356 (55%)
 - Turnover: 55.0% | Avg tenure: 3.9yr active | Median: 2.6yr
 - 37 departments | 15 countries | 25 grades | 151 functions | 869 job titles
 - 222 managers | Avg span: 2.92 | Max span: 13
-- 3,297 career moves classified
 
 ### Environment Variables
 | Variable | Location | Purpose |
 |----------|----------|---------|
-| LLM_PROVIDER | backend/.env | `openrouter` or `openai` |
-| OPENROUTER_API_KEY | backend/.env | Chat LLM |
-| OPENROUTER_MODEL | backend/.env | Default: nemotron-3-super-120b-a12b:free |
-| OPENAI_API_KEY | backend/.env | Reports LLM (GPT-4o) |
-| OPENAI_MODEL | backend/.env | Default: gpt-4o-mini |
+| LLM_PROVIDER | backend/.env + Cloud Run | `openrouter` or `openai` |
+| OPENROUTER_API_KEY | backend/.env + Cloud Run | Chat LLM |
+| OPENROUTER_MODEL | backend/.env + Cloud Run | Default: nemotron-3-super-120b-a12b:free |
+| OPENAI_API_KEY | backend/.env + Cloud Run | Reports LLM (GPT-4o) |
+| OPENAI_MODEL | backend/.env + Cloud Run | Default: gpt-4o-mini |
+| CORS_ORIGINS | Cloud Run | Firebase hosting domains |
+| DATA_DIR | Cloud Run | /app/wh_Dataset |
 | GITHUB_PERSONAL_ACCESS_TOKEN | .claude/settings.local.json | GitHub MCP |
