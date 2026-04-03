@@ -23,6 +23,7 @@ from .routers import (
     pipeline_router,
     ws,
     recognition,
+    brain_router,
 )
 from .routers import dashboard
 
@@ -65,6 +66,16 @@ async def lifespan(app: FastAPI):
             print(f"Recognition data loaded from {data_dir}")
         except Exception as e:
             print(f"Warning: Could not auto-load recognition data: {e}")
+
+    # Build ChromaDB knowledge base from loaded data
+    try:
+        from .services.knowledge_base import rebuild_knowledge_base
+        from .data_loader import _data_cache
+        from .recognition_loader import _recog_cache
+        doc_count = rebuild_knowledge_base(_data_cache, _recog_cache)
+        print(f"Knowledge base built: {doc_count} documents")
+    except Exception as e:
+        print(f"Warning: Knowledge base build failed: {e}")
 
     yield
 
@@ -117,6 +128,7 @@ app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxono
 app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(recognition.router, prefix="/api/recognition", tags=["Recognition"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard Aggregate"])
+app.include_router(brain_router.router, prefix="/api/brain", tags=["Brain AI"])
 app.include_router(profiling_router, prefix="/api", tags=["Profiling"])
 app.include_router(ws.router, tags=["WebSocket"])
 

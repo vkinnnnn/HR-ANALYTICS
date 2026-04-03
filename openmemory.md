@@ -665,3 +665,64 @@
 | CORS_ORIGINS | Cloud Run | Firebase hosting domains |
 | DATA_DIR | Cloud Run | /app/wh_Dataset |
 | GITHUB_PERSONAL_ACCESS_TOKEN | .claude/settings.local.json | GitHub MCP |
+
+---
+
+## Session 16: The Brain — LangGraph Agent Architecture (March 2026)
+
+### What Was Built
+Complete AI agent overhaul — "The Brain" — replacing the simple deep-context chatbot with a LangGraph-powered tool-calling agent backed by ChromaDB vector search.
+
+### New Backend Services (`backend/app/services/`)
+| File | Purpose |
+|------|---------|
+| `brain.py` | Core LangGraph agent — 9 tools, StateGraph with agent/tools loop, SSE streaming |
+| `knowledge_base.py` | ChromaDB vector store — embeds workforce stats, recognition data, KPIs, benchmarks |
+| `memory_manager.py` | Per-user memory — Mem0 with in-memory dict fallback |
+| `analytics_engine.py` | KPI query interface — 21 query types from cached DataFrames |
+| `file_processor.py` | Multi-format file parsing — CSV, Excel, PDF, Word, images, text |
+| `pipeline_orchestrator.py` | Pipeline wrapper — data load + knowledge base rebuild |
+| `report_generator.py` | Executive reports — 4 types with structured sections |
+
+### 9 Agent Tools
+1. `search_knowledge` — ChromaDB semantic search
+2. `search_memory` — Mem0 per-user recall
+3. `save_memory` — Mem0 per-user persist
+4. `query_analytics` — Live KPI computation (21 types)
+5. `run_pipeline` — Trigger data pipeline
+6. `process_file` — Parse uploaded files
+7. `generate_report` — Executive reports
+8. `control_dashboard` — UI navigation commands
+9. `predict_category` — TF-IDF + LogReg category prediction
+
+### Brain Router (`/api/brain/`)
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/brain/chat` | POST | SSE streaming chat |
+| `/api/brain/chat/sync` | POST | Non-streaming fallback |
+| `/api/brain/upload` | POST | File upload + pipeline |
+| `/api/brain/memory/{user_id}` | GET | Retrieve memories |
+| `/api/brain/memory/{user_id}` | DELETE | Clear memories (GDPR) |
+| `/api/brain/health` | GET | Health check |
+
+### Frontend Changes
+| File | Change |
+|------|--------|
+| `stores/chatStore.ts` | Zustand state — sessionStorage persistence |
+| `lib/chatApi.ts` | SSE streaming client via fetch |
+| `chat/ChatPanel.tsx` | Rebuilt with Zustand + SSE + react-markdown |
+| `chat/ChatInput.tsx` | Multimodal: textarea + file + voice + send |
+| `chat/ChatMessage.tsx` | Markdown, charts, copy, TTS, nav buttons |
+| `chat/VoiceButton.tsx` | Web Speech API voice input |
+| `chat/FilePreview.tsx` | Upload preview chips |
+
+### New Dependencies
+- Python: chromadb, langchain, langchain-openai, langgraph, mem0ai, PyMuPDF, openpyxl, python-docx, Pillow, sse-starlette
+- npm: zustand, react-markdown, remark-gfm, jspdf, jspdf-autotable
+
+### Key Decisions
+- ChromaDB in-memory (rebuilt on startup from cached DataFrames)
+- Mem0 optional with in-memory fallback
+- Existing chat.py preserved — brain_router is additive
+- Same data_loader cache as dashboard APIs
+- LangGraph StateGraph with simple agent→tools→agent loop

@@ -1,43 +1,84 @@
-# Dependencies
+# ─── Dependencies ───────────────────────────────────────
 node_modules/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
 
-# Secrets
+# ─── Secrets & Environment ─────────────────────────────
 .env
-backend/.env
-
-# Build
-frontend/dist/
-*.db
-
-# Environment & secrets
-.env
+.env.*
 backend/.env
 backend/env.yaml
+!frontend/.env.development
+!frontend/.env.production
 
-# Claude Code local overrides
+# ─── Claude / Cursor local overrides ───────────────────
 CLAUDE.local.md
 .claude/settings.local.json
+.cursor/rules/openmemory.mdc
 
-# IDE
-.vscode/
-.idea/
-.cursor/
+# ─── Datasets (loaded at runtime, never committed) ─────
+*.csv
+*.xlsx
+*.xls
+wh_Dataset/
+backend/wh_Dataset/
+backend/Dataset_real/
+Dataset_real/
 
-# Firebase
-.firebase/
+# ─── Generated / cached artifacts ──────────────────────
+taxonomy_cache.json
+backend/taxonomy_cache.json
+backend/output/
+output/
+*.zip
+*.pdf
 
-# MCP data (memory, caches)
-.mcp-data/
+# ─── Build output ──────────────────────────────────────
+frontend/dist/
+*.db
+*.sqlite3
+hr_platform.db
 
-# OS
-.DS_Store
-Thumbs.db
+# ─── ChromaDB / vector store ──────────────────────────
+chroma_data/
 
-# Pipeline artifacts
+# ─── Test caches ──────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
+# ─── Pipeline checkpoints ─────────────────────────────
 checkpoints/
 
-# OpenMemory - IDE/Assistant specific rules
-.cursor\rules\openmemory.mdc
-CLAUDE.md
+# ─── IDE ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── Firebase ─────────────────────────────────────────
+.firebase/
+
+# ─── MCP data ─────────────────────────────────────────
+.mcp-data/
+
+# ─── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Logs & temp ──────────────────────────────────────
+*.log
+*.tmp
+*.bak
+
+# ─── Session prompts (dev artifacts) ──────────────────
+SESSION-*.md
+FINAL-*.md
+
+# ─── Stray design / prototype files ──────────────────
+Figma*/
+Skills/

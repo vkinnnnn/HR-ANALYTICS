@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { ToastProvider } from './components/ui/Toast';
 import { Sidebar } from './components/layout/Sidebar';
 import { AmbientBackground } from './components/layout/AmbientBackground';
 import { ChatTrigger } from './components/chat/ChatTrigger';
-import { ChatPanel, type ChatMessage } from './components/chat/ChatPanel';
+import { ChatPanel } from './components/chat/ChatPanel';
+import { useChatStore } from './stores/chatStore';
 import { Dashboard } from './pages/Dashboard';
 import { RecognitionExplorer } from './pages/RecognitionExplorer';
 import { Categories } from './pages/Categories';
@@ -25,69 +26,53 @@ import { Insights } from './pages/Insights';
 import { SettingsPage } from './pages/SettingsPage';
 import LandingPage from './pages/LandingPage';
 import api from './lib/api';
+import type { ChatMessage } from './stores/chatStore';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const saved = sessionStorage.getItem('wiq_chat');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
+  const { isOpen, openPanel, closePanel, togglePanel, addMessage, messages } = useChatStore();
   const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
   const [hasNotification, setHasNotification] = useState(false);
-  const persistTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // Persist chat to sessionStorage (debounced)
-  useEffect(() => {
-    if (persistTimer.current) clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(() => {
-      try { sessionStorage.setItem('wiq_chat', JSON.stringify(chatMessages)); } catch {}
-    }, 500);
-  }, [chatMessages]);
-
-  // First-time onboarding: auto-open chat with welcome message
+  // First-time onboarding
   useEffect(() => {
     const hasOnboarded = localStorage.getItem('workforceiq_onboarded');
     if (!hasOnboarded) {
       setTimeout(() => {
-        setChatOpen(true);
+        openPanel();
         setHasNotification(false);
         const welcomeMsg: ChatMessage = {
           role: 'system',
-          content: '**Welcome to Workforce IQ!** I\'m your AI workforce analyst. I can help you understand your employee data, answer questions, and guide you around the platform.\n\nTry clicking one of the prompts below, or ask me anything about your workforce.',
+          content: '**Welcome to Workforce IQ!** I\'m your AI workforce analyst powered by **The Brain**. I can analyze your data, answer questions, generate reports, and guide you around the platform.\n\nTry clicking a prompt below, or ask me anything.',
           timestamp: Date.now(),
         };
-        setChatMessages(prev => {
-          if (prev.some(m => m.content.includes('Welcome to Workforce IQ'))) return prev;
-          return [welcomeMsg, ...prev];
-        });
+        const currentMessages = useChatStore.getState().messages;
+        if (!currentMessages.some(m => m.content.includes('Welcome to Workforce IQ'))) {
+          addMessage(welcomeMsg);
+        }
         localStorage.setItem('workforceiq_onboarded', 'true');
       }, 2000);
     }
   }, []);
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K to toggle chat
+  // Keyboard shortcut: Cmd+K / Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setChatOpen(prev => {
-          if (!prev) setHasNotification(false);
-          return !prev;
-        });
+        togglePanel();
+        if (!isOpen) setHasNotification(false);
       }
-      if (e.key === 'Escape' && chatOpen) {
-        setChatOpen(false);
+      if (e.key === 'Escape' && isOpen) {
+        closePanel();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [chatOpen]);
+  }, [isOpen, togglePanel, closePanel]);
 
-  // Proactive insights: check for anomalies after data loads
+  // Proactive insights
   useEffect(() => {
     async function checkAnomalies() {
       try {
@@ -96,33 +81,28 @@ function AppContent() {
           api.get('/api/predictions/flight-risk', { params: { top_n: 5 } }),
         ]);
         const dangers = sumRes.data?.danger_zones || [];
-        const highRisk = (riskRes.data?.employees || []).filter((e: any) => e.risk_score > 0.8);
+        const highRisk = (riskRes.data?.employees || []).filter((e: Record<string, unknown>) => (e.risk_score as number) > 0.8);
 
         if (dangers.length > 0 || highRisk.length > 0) {
           setHasNotification(true);
-          // Build proactive system message
           const parts: string[] = ['**I noticed some things worth your attention:**'];
           if (dangers.length > 0) {
             const worst = dangers[0];
             parts.push(`- ${worst.department} has ${worst.turnover_rate}% turnover — significantly above the ${worst.company_avg}% company average`);
           }
           if (highRisk.length > 0) {
-            const depts = [...new Set(highRisk.map((e: any) => e.department))];
+            const depts = [...new Set(highRisk.map((e: Record<string, unknown>) => e.department))];
             parts.push(`- ${highRisk.length} employees in ${depts.join(', ')} are flagged above 80% flight risk`);
           }
-          // Check new hires
-          const hireRes = await api.get('/api/workforce/summary');
-          if (hireRes.data?.new_hires_90d === 0) {
-            parts.push('- No new hires recorded in the last 90 days');
-          }
 
-          // Store as a system message to show when panel opens
-          const systemMsg: ChatMessage = {
-            role: 'system',
-            content: parts.join('\n'),
-            timestamp: Date.now(),
-          };
-          setChatMessages([systemMsg]);
+          const currentMessages = useChatStore.getState().messages;
+          if (!currentMessages.some(m => m.content.includes('noticed some things'))) {
+            addMessage({
+              role: 'system',
+              content: parts.join('\n'),
+              timestamp: Date.now(),
+            });
+          }
         }
       } catch {
         // Non-critical
@@ -131,18 +111,10 @@ function AppContent() {
     checkAnomalies();
   }, []);
 
-  const handleSendMessage = useCallback((msg: ChatMessage) => {
-    setChatMessages(prev => [...prev, msg]);
-  }, []);
-
-  const handleClearChat = useCallback(() => {
-    setChatMessages([]);
-  }, []);
-
   const handleOpenChat = useCallback(() => {
-    setChatOpen(true);
+    openPanel();
     setHasNotification(false);
-  }, []);
+  }, [openPanel]);
 
   return (
     <>
@@ -152,9 +124,9 @@ function AppContent() {
         className="relative z-10"
         style={{
           marginLeft: 228,
-          marginRight: chatOpen ? 420 : 0,
+          marginRight: isOpen ? 420 : 0,
           padding: '28px 28px 44px',
-          maxWidth: chatOpen ? undefined : 1320 + 228,
+          maxWidth: isOpen ? undefined : 1320 + 228,
           minHeight: '100vh',
           transition: 'margin-right 300ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
@@ -187,15 +159,12 @@ function AppContent() {
 
       <ChatTrigger
         onClick={handleOpenChat}
-        isOpen={chatOpen}
+        isOpen={isOpen}
         hasNotification={hasNotification}
       />
       <ChatPanel
-        isOpen={chatOpen}
-        onClose={() => setChatOpen(false)}
-        messages={chatMessages}
-        onSendMessage={handleSendMessage}
-        onClearChat={handleClearChat}
+        isOpen={isOpen}
+        onClose={closePanel}
         currentPage={location.pathname.startsWith('/app') ? location.pathname : `/app${location.pathname}`}
         prefillMessage={prefillMessage}
         onPrefillConsumed={() => setPrefillMessage(null)}

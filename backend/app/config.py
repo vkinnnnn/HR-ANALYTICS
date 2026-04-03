@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # File limits
     MAX_UPLOAD_SIZE_MB: int = 100
 
+    # ChromaDB
+    CHROMA_PERSIST_DIR: str = "./chroma_data"
+    CHROMA_COLLECTION: str = "workforce_iq_knowledge"
+
+    # Mem0 (per-user memory)
+    MEM0_ENABLED: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
