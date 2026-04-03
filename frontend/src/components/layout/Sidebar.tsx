@@ -14,52 +14,52 @@ const NAV_GROUPS = [
     label: 'Overview',
     color: '#FF8A4C',
     items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/explorer', icon: Search, label: 'Recognition Explorer' },
+      { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/app/explorer', icon: Search, label: 'Recognition Explorer' },
     ],
   },
   {
     label: 'Analytics',
     color: '#a78bfa',
     items: [
-      { to: '/categories', icon: TreePine, label: 'Categories' },
-      { to: '/inequality', icon: Scale, label: 'Inequality' },
-      { to: '/quality', icon: MessageSquareText, label: 'Message Quality' },
+      { to: '/app/categories', icon: TreePine, label: 'Categories' },
+      { to: '/app/inequality', icon: Scale, label: 'Inequality' },
+      { to: '/app/quality', icon: MessageSquareText, label: 'Message Quality' },
     ],
   },
   {
     label: 'Network',
     color: '#60a5fa',
     items: [
-      { to: '/flow', icon: ArrowRightLeft, label: 'Recognition Flow' },
-      { to: '/network', icon: Network, label: 'Social Graph' },
+      { to: '/app/flow', icon: ArrowRightLeft, label: 'Recognition Flow' },
+      { to: '/app/network', icon: Network, label: 'Social Graph' },
     ],
   },
   {
     label: 'People',
     color: '#34d399',
     items: [
-      { to: '/nominators', icon: Trophy, label: 'Nominators' },
-      { to: '/fairness', icon: ShieldCheck, label: 'Fairness Audit' },
+      { to: '/app/nominators', icon: Trophy, label: 'Nominators' },
+      { to: '/app/fairness', icon: ShieldCheck, label: 'Fairness Audit' },
     ],
   },
   {
     label: 'Workforce',
     color: '#fbbf24',
     items: [
-      { to: '/workforce', icon: Users, label: 'Workforce' },
-      { to: '/turnover', icon: TrendingDown, label: 'Turnover' },
-      { to: '/careers', icon: Briefcase, label: 'Careers' },
-      { to: '/managers', icon: UserCog, label: 'Managers' },
+      { to: '/app/workforce', icon: Users, label: 'Workforce' },
+      { to: '/app/turnover', icon: TrendingDown, label: 'Turnover' },
+      { to: '/app/careers', icon: Briefcase, label: 'Careers' },
+      { to: '/app/managers', icon: UserCog, label: 'Managers' },
     ],
   },
   {
     label: 'Intelligence',
     color: '#fb7185',
     items: [
-      { to: '/insights', icon: Sparkles, label: 'AI Insights' },
-      { to: '/data-hub', icon: Upload, label: 'Data Hub' },
-      { to: '/settings', icon: Settings, label: 'Settings' },
+      { to: '/app/insights', icon: Sparkles, label: 'AI Insights' },
+      { to: '/app/data-hub', icon: Upload, label: 'Data Hub' },
+      { to: '/app/settings', icon: Settings, label: 'Settings' },
     ],
   },
 ];

@@ -23,6 +23,7 @@ import { Managers } from './pages/Managers';
 import { Org } from './pages/Org';
 import { Insights } from './pages/Insights';
 import { SettingsPage } from './pages/SettingsPage';
+import LandingPage from './pages/LandingPage';
 import api from './lib/api';
 
 function AppContent() {
@@ -159,28 +160,28 @@ function AppContent() {
         }}
       >
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/explorer" element={<RecognitionExplorer />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/inequality" element={<Inequality />} />
-          <Route path="/quality" element={<Quality />} />
-          <Route path="/flow" element={<Flow />} />
-          <Route path="/network" element={<Flow />} />
-          <Route path="/nominators" element={<Nominators />} />
-          <Route path="/fairness" element={<Fairness />} />
-          <Route path="/workforce" element={<Workforce />} />
-          <Route path="/turnover" element={<Turnover />} />
-          <Route path="/tenure" element={<Tenure />} />
-          <Route path="/flight-risk" element={<FlightRisk />} />
-          <Route path="/careers" element={<Careers />} />
-          <Route path="/managers" element={<Managers />} />
-          <Route path="/org" element={<Org />} />
-          <Route path="/insights" element={<Insights />} />
-          <Route path="/data-hub" element={<DataHub />} />
-          <Route path="/pipeline" element={<DataHub />} />
-          <Route path="/upload" element={<DataHub />} />
-          <Route path="/reports" element={<DataHub />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="" element={<Dashboard />} />
+          <Route path="explorer" element={<RecognitionExplorer />} />
+          <Route path="categories" element={<Categories />} />
+          <Route path="inequality" element={<Inequality />} />
+          <Route path="quality" element={<Quality />} />
+          <Route path="flow" element={<Flow />} />
+          <Route path="network" element={<Flow />} />
+          <Route path="nominators" element={<Nominators />} />
+          <Route path="fairness" element={<Fairness />} />
+          <Route path="workforce" element={<Workforce />} />
+          <Route path="turnover" element={<Turnover />} />
+          <Route path="tenure" element={<Tenure />} />
+          <Route path="flight-risk" element={<FlightRisk />} />
+          <Route path="careers" element={<Careers />} />
+          <Route path="managers" element={<Managers />} />
+          <Route path="org" element={<Org />} />
+          <Route path="insights" element={<Insights />} />
+          <Route path="data-hub" element={<DataHub />} />
+          <Route path="pipeline" element={<DataHub />} />
+          <Route path="upload" element={<DataHub />} />
+          <Route path="reports" element={<DataHub />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Routes>
       </main>
 
@@ -208,7 +209,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AppContent />
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/app/*" element={<AppContent />} />
+        </Routes>
       </ToastProvider>
     </BrowserRouter>
   );
