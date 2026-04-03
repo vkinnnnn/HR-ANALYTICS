@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from .database import init_db
 from .data_loader import load_and_process, is_loaded
@@ -23,6 +24,7 @@ from .routers import (
     ws,
     recognition,
 )
+from .routers import dashboard
 
 
 @asynccontextmanager
@@ -71,11 +73,18 @@ async def lifespan(app: FastAPI):
         scheduler.shutdown(wait=False)
 
 
+from .middleware import ProfilingMiddleware, router as profiling_router
+
 app = FastAPI(
     title="HR Workforce Analytics Platform",
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# Profiling middleware (before CORS so it wraps everything)
+app.add_middleware(ProfilingMiddleware)
+# GZip compression for responses > 1KB
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 allowed_origins = [
     "http://localhost:3000",
@@ -107,6 +116,8 @@ app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxonomy"])
 app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(recognition.router, prefix="/api/recognition", tags=["Recognition"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard Aggregate"])
+app.include_router(profiling_router, prefix="/api", tags=["Profiling"])
 app.include_router(ws.router, tags=["WebSocket"])
 
 

@@ -3,6 +3,7 @@ Recognition Analytics Router — All endpoints for recognition intelligence.
 """
 from fastapi import APIRouter, HTTPException, Query
 from ..recognition_loader import get_recognition, is_recognition_loaded, compute_gini, ACTION_VERBS, CLICHE_PATTERNS, SENIORITY_ORDER
+from ..cache import cached_response
 import numpy as np, re
 
 router = APIRouter()
@@ -15,6 +16,7 @@ def _check():
 
 
 @router.get("/summary")
+@cached_response(ttl=120)
 async def summary():
     df = _check()
     recipient_counts = df['recipient_title'].value_counts()
@@ -37,6 +39,7 @@ async def summary():
 
 
 @router.get("/categories")
+@cached_response(ttl=120)
 async def categories():
     df = _check()
     result = []
@@ -72,6 +75,7 @@ async def subcategories(category_id: str = Query(None)):
 
 
 @router.get("/inequality")
+@cached_response(ttl=120)
 async def inequality():
     df = _check()
     counts = df['recipient_title'].value_counts().values.tolist()
@@ -94,6 +98,7 @@ async def inequality():
 
 
 @router.get("/flow")
+@cached_response(ttl=120)
 async def flow():
     df = _check()
     direction = df['direction'].value_counts()
@@ -119,6 +124,7 @@ async def flow():
 
 
 @router.get("/nlp-quality")
+@cached_response(ttl=120)
 async def nlp_quality():
     df = _check()
     bands = df['specificity_band'].value_counts().reindex(['Very Vague','Vague','Moderate','Specific','Highly Specific'], fill_value=0)
@@ -138,6 +144,7 @@ async def nlp_quality():
 
 
 @router.get("/fairness")
+@cached_response(ttl=120)
 async def fairness():
     df = _check()
     by_func = df.groupby('recipient_function')['specificity'].agg(['mean','count']).reset_index()
@@ -160,6 +167,7 @@ async def fairness():
 
 
 @router.get("/network")
+@cached_response(ttl=120)
 async def network():
     df = _check()
     edges_df = df.groupby(['nominator_title','recipient_title']).size().reset_index(name='weight')
@@ -185,6 +193,7 @@ def infer_function_cached(title):
 
 
 @router.get("/nominators")
+@cached_response(ttl=120)
 async def nominators():
     df = _check()
     nom_stats = df.groupby('nominator_title').agg(

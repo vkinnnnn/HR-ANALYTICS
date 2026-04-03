@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from ..data_loader import get_employees, get_history, is_loaded, load_and_process
 from ..recognition_loader import load_recognition, is_recognition_loaded, get_recognition
+from ..cache import invalidate_all as _invalidate_cache
 
 router = APIRouter()
 
@@ -54,6 +55,7 @@ async def upload_csv(file: UploadFile = File(...)):
     try:
         load_and_process(UPLOAD_DIR)
         load_recognition(UPLOAD_DIR)
+        _invalidate_cache()
         reload_status = "success"
     except Exception as e:
         reload_error = str(e)
@@ -123,6 +125,7 @@ async def reload_data():
     try:
         load_and_process(UPLOAD_DIR)
         load_recognition(UPLOAD_DIR)
+        _invalidate_cache()
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=404,
