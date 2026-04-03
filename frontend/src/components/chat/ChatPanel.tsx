@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, ArrowUp, Mic, MicOff } from 'lucide-react';
+import { X } from 'lucide-react';
+import { PromptInputBox } from '../ui/ai-prompt-box';
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, CartesianGrid,
@@ -62,39 +63,9 @@ export function ChatPanel({
   isOpen, onClose, messages, onSendMessage, onClearChat,
   currentPage, prefillMessage, onPrefillConsumed, onNavigate,
 }: ChatPanelProps) {
-  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Web Speech API for voice input
-  const hasSpeech = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
-
-  function toggleVoice() {
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const recognition = new SR();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.onresult = (e: any) => {
-      const transcript = Array.from(e.results).map((r: any) => r[0].transcript).join('');
-      setInput(transcript);
-    };
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-  }
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -119,13 +90,7 @@ export function ChatPanel({
     return () => document.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 100) + 'px';
-    }
-  }, [input]);
+  // (Auto-resize handled by PromptInputBox)
 
   function handleNavigation(nav: any) {
     if (nav && onNavigate && nav.action === 'navigate' && nav.route) {
@@ -151,7 +116,6 @@ export function ChatPanel({
 
     const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: Date.now() };
     onSendMessage(userMsg);
-    setInput('');
     setIsLoading(true);
     setStreamingContent(null);
 
@@ -256,13 +220,6 @@ export function ChatPanel({
     } finally {
       setIsLoading(false);
       setStreamingContent(null);
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
     }
   }
 
@@ -538,72 +495,13 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* ─── Input Bar ─── */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-          {hasSpeech && (
-            <button
-              onClick={toggleVoice}
-              title={isListening ? 'Stop listening' : 'Voice input'}
-              style={{
-                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                background: isListening ? 'rgba(251,113,133,0.15)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${isListening ? 'rgba(251,113,133,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                color: isListening ? '#fb7185' : '#52525b',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                animation: isListening ? 'glowPulse 1.5s infinite' : 'none',
-              }}
-            >
-              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-            </button>
-          )}
-          <div style={{ position: 'relative', flex: 1 }}>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about your workforce..."
-            rows={1}
-            style={{
-              width: '100%', resize: 'none',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.09)',
-              borderRadius: 14,
-              padding: '11px 48px 11px 16px',
-              color: '#fafafa', fontSize: 13, lineHeight: 1.5,
-              outline: 'none', fontFamily: 'inherit', maxHeight: 100,
-              transition: 'border-color 150ms, box-shadow 150ms',
-            }}
-            onFocus={e => {
-              e.currentTarget.style.borderColor = 'rgba(255,138,76,0.3)';
-              e.currentTarget.style.boxShadow = '0 0 0 2px rgba(255,138,76,0.08)';
-            }}
-            onBlur={e => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          />
-          {input.trim() && (
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={isLoading}
-              style={{
-                position: 'absolute', right: 6, bottom: 6,
-                width: 34, height: 34, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #FF8A4C, #e85d04)',
-                border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff',
-                boxShadow: '0 0 8px rgba(255,138,76,0.2)',
-                opacity: isLoading ? 0.5 : 1,
-              }}
-            >
-              <ArrowUp size={15} />
-            </button>
-          )}
-          </div>
-        </div>
+      {/* ─── Input Bar (AI Prompt Box) ─── */}
+      <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        <PromptInputBox
+          onSend={(message) => sendMessage(message)}
+          isLoading={isLoading}
+          placeholder="Ask about your workforce..."
+        />
       </div>
     </div>
   );
