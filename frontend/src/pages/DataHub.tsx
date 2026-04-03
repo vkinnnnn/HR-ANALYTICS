@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Upload, Database, Sparkles, FileText, Download, Loader2,
-  RefreshCw, AlertTriangle, X, ClipboardCopy, CheckCircle2,
-  TrendingUp,
+  Upload, Database, Sparkles, Download, Loader2, RefreshCw, X,
+  CheckCircle2, FileText, BarChart3, Zap,
 } from 'lucide-react';
 import { PageHero } from '../components/ui/PageHero';
 import { Panel } from '../components/ui/Panel';
@@ -12,180 +11,82 @@ import { useToast } from '../components/ui/Toast';
 import api from '../lib/api';
 
 /* ─── Types ─── */
-
-interface UploadStatus {
+interface DataStatus {
   is_loaded: boolean;
   employee_count: number;
-  history_count: number;
   active_count: number;
   departed_count: number;
+  recognition_count?: number;
+  recognition_categories?: number;
+  recognition_subcategories?: number;
+  unique_recipients?: number;
+  unique_nominators?: number;
   loaded_at: string | null;
-  upload_dir: string;
-  recent_uploads: any[];
 }
 
-interface ReportSection {
-  title: string;
-  narrative: string;
-  chart: { type: string; data: { name: string; value: number }[] } | null;
-  key_metrics: { label: string; value: string; change?: string }[];
-  insights: string[];
-  recommendations?: string[];
-}
-
-interface StructuredReport {
-  title: string;
-  generated_at: string;
-  executive_summary: string;
-  sections: ReportSection[];
-  recommendations: { priority: string; title: string; detail: string }[];
-  metrics_snapshot: Record<string, number | string>;
-}
+type Tab = 'overview' | 'upload' | 'reports';
 
 /* ─── Helpers ─── */
+const Shimmer = ({ h = 48 }: { h?: number }) => <div style={{ height: h, background: 'rgba(255,255,255,0.03)', borderRadius: 10, animation: 'shimmer 2s infinite' }} />;
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+const Stat = ({ label, value, color = '#fafafa' }: { label: string; value: string | number; color?: string }) => (
+  <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+    <p style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#52525b', marginBottom: 4 }}>{label}</p>
+    <p style={{ fontSize: 20, fontWeight: 800, color, letterSpacing: '-0.03em' }}>{value}</p>
+  </div>
+);
 
-function StatRow({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div
-      className="flex items-center justify-between"
-      style={{
-        padding: '10px 14px', borderRadius: 10,
-        background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)',
-      }}
-    >
-      <span style={{ fontSize: 12, color: '#71717a' }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color }}>{value}</span>
-    </div>
-  );
-}
+const TabButton = ({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: '10px 20px', borderRadius: 9999, display: 'flex', alignItems: 'center', gap: 8,
+      background: active ? 'rgba(255,138,76,0.12)' : 'rgba(255,255,255,0.03)',
+      border: `1px solid ${active ? 'rgba(255,138,76,0.25)' : 'rgba(255,255,255,0.06)'}`,
+      color: active ? '#FF8A4C' : '#71717a', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      transition: 'all 150ms',
+    }}
+  >
+    {icon}{label}
+  </button>
+);
 
-function StepCard({ icon, title, badge, badgeColor, action, delay }: {
-  icon: React.ReactNode; title: string;
-  badge: string; badgeColor: string;
-  action?: React.ReactNode; delay: number;
-}) {
-  return (
-    <Panel delay={delay}>
-      <div className="flex flex-col items-center text-center gap-3" style={{ padding: '8px 0' }}>
-        <div
-          className="w-10 h-10 rounded-[12px] flex items-center justify-center"
-          style={{ background: 'rgba(255,138,76,0.1)' }}
-        >
-          <span style={{ color: '#FF8A4C' }}>{icon}</span>
-        </div>
-        <p style={{ fontSize: 13, fontWeight: 600, color: '#fafafa' }}>{title}</p>
-        <Badge label={badge} color={badgeColor} dot />
-        {action && <div style={{ marginTop: 4, width: '100%' }}>{action}</div>}
-      </div>
-    </Panel>
-  );
-}
-
-function OrangeButton({ onClick, disabled, loading, children }: {
-  onClick: () => void; disabled?: boolean; loading?: boolean; children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      style={{
-        width: '100%', padding: '10px 20px', borderRadius: 12,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        background: disabled ? 'rgba(255,255,255,0.04)' : 'linear-gradient(135deg, rgba(255,138,76,0.15), rgba(232,93,4,0.15))',
-        border: `1px solid ${disabled ? 'rgba(255,255,255,0.06)' : 'rgba(255,138,76,0.25)'}`,
-        color: disabled ? '#52525b' : '#FF8A4C', fontSize: 13, fontWeight: 600,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
-      {loading && <Loader2 size={14} className="animate-spin" />}
-      {children}
-    </button>
-  );
-}
-
-const priorityColor: Record<string, string> = {
-  critical: '#fb7185', high: '#fbbf24', medium: '#a78bfa', low: '#34d399',
-};
-
-/* ─── Main Component ─── */
-
+/* ─── Component ─── */
 export function DataHub() {
-  const { addToast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Upload state
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [status, setStatus] = useState<DataStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-
-  // Status state
-  const [status, setStatus] = useState<UploadStatus | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
-  const [recomputing, setRecomputing] = useState(false);
-
-  // Report state
-  const [report, setReport] = useState<StructuredReport | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  /* ─── Fetch status ─── */
+  const [report, setReport] = useState<any>(null);
+  const [exporting, setExporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { addToast } = useToast();
 
   const fetchStatus = async () => {
     try {
-      setStatusLoading(true);
       const res = await api.get('/api/upload/status');
       setStatus(res.data);
-    } catch {
-      setStatus(null);
-    } finally {
-      setStatusLoading(false);
-    }
+    } catch {}
+    setLoading(false);
   };
 
   useEffect(() => { fetchStatus(); }, []);
 
-  /* ─── Upload handlers ─── */
-
-  const handleFilePick = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    if (!file.name.endsWith('.csv')) {
-      addToast('Only .csv files are accepted', 'error');
-      return;
-    }
-    setSelectedFile(file);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    handleFilePick(e.dataTransfer.files);
-  };
-
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!file) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      await api.post('/api/upload/csv', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      addToast('File uploaded and processed successfully', 'success');
-      setSelectedFile(null);
-      await fetchStatus();
-    } catch (err: any) {
-      addToast(err?.response?.data?.detail ?? 'Upload failed', 'error');
-    } finally {
-      setUploading(false);
-    }
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.post('/api/upload/csv', fd);
+      addToast('Dataset uploaded and processed', 'success');
+      setFile(null);
+      fetchStatus();
+    } catch { addToast('Upload failed', 'error'); }
+    finally { setUploading(false); }
   };
 
   const handleReload = async () => {
@@ -193,374 +94,321 @@ export function DataHub() {
     try {
       await api.post('/api/upload/reload');
       await fetchStatus();
-      addToast('Data reloaded successfully', 'success');
-    } catch {
-      addToast('Failed to reload data', 'error');
-    } finally {
-      setReloading(false);
-    }
+      addToast('Data reloaded — dashboard updated', 'success');
+    } catch { addToast('Reload failed', 'error'); }
+    finally { setReloading(false); }
   };
 
-  const handleRecompute = async () => {
-    setRecomputing(true);
-    try {
-      await api.post('/api/upload/reload');
-      await fetchStatus();
-      addToast('Analytics recomputed', 'success');
-    } catch {
-      addToast('Failed to recompute analytics', 'error');
-    } finally {
-      setRecomputing(false);
-    }
-  };
-
-  /* ─── Report handlers ─── */
-
-  const handleGenerateReport = async () => {
+  const handleGenerate = async () => {
     setGenerating(true);
     try {
       const res = await api.post('/api/reports/generate');
       setReport(res.data);
       addToast('Report generated', 'success');
-    } catch (err: any) {
-      addToast(err?.response?.data?.detail ?? 'Failed to generate report', 'error');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleCopyReport = async () => {
-    if (!report) return;
-    const text = [
-      report.title,
-      report.executive_summary,
-      '',
-      ...report.sections.map(s => `${s.title}\n${s.narrative}`),
-      '',
-      'Recommendations:',
-      ...report.recommendations.map(r => `[${r.priority}] ${r.title} — ${r.detail}`),
-    ].join('\n\n');
-    await navigator.clipboard.writeText(text).catch(() => {});
-    setCopied(true);
-    addToast('Report copied to clipboard', 'success');
-    setTimeout(() => setCopied(false), 2000);
+    } catch { addToast('Report generation failed', 'error'); }
+    finally { setGenerating(false); }
   };
 
   const handleExport = () => {
+    setExporting(true);
     window.open(`${api.defaults.baseURL}/api/reports/export`, '_blank');
+    setTimeout(() => setExporting(false), 2000);
   };
 
-  const isLoaded = status?.is_loaded ?? false;
-
-  /* ─── Render ─── */
+  const hasData = status?.is_loaded || (status?.recognition_count ?? 0) > 0;
 
   return (
-    <div>
+    <div style={{ maxWidth: 1320, margin: '0 auto' }}>
       <PageHero
-        icon={<Upload size={20} />}
+        icon={<Database size={20} />}
         title="Data Hub"
-        subtitle="Upload data, run analysis pipelines, and generate reports."
+        subtitle="Manage datasets, refresh analytics, and generate reports — all in one place."
       />
 
-      {/* ───────── Section 1: Data Ingestion ───────── */}
-      <SectionHeader icon={<Database size={16} />} title="Data Ingestion" />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+      {/* Tab Switcher */}
+      <div className="flex gap-2 mb-5">
+        <TabButton active={tab === 'overview'} label="Overview" icon={<BarChart3 size={14} />} onClick={() => setTab('overview')} />
+        <TabButton active={tab === 'upload'} label="Upload Data" icon={<Upload size={14} />} onClick={() => setTab('upload')} />
+        <TabButton active={tab === 'reports'} label="Reports & Export" icon={<FileText size={14} />} onClick={() => setTab('reports')} />
+      </div>
 
-        {/* Upload Dataset */}
-        <Panel delay={0}>
-          <SectionHeader icon={<Upload size={14} />} title="Upload Dataset" subtitle="Drag and drop or click to select" />
-
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            style={{
-              height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 12,
-              border: `2px dashed ${dragOver ? '#FF8A4C' : 'rgba(255,255,255,0.08)'}`,
-              background: dragOver ? 'rgba(255,138,76,0.06)' : 'rgba(255,255,255,0.02)',
-              cursor: uploading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={e => { handleFilePick(e.target.files); e.target.value = ''; }}
-              style={{ display: 'none' }}
+      {/* ═══════ OVERVIEW TAB ═══════ */}
+      {tab === 'overview' && (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {/* Data Health */}
+          <Panel delay={0}>
+            <SectionHeader
+              icon={<Database size={14} />}
+              title="Data Health"
+              action={hasData ? <Badge label="Data Loaded" color="#34d399" dot /> : <Badge label="No Data" color="#fb7185" dot />}
             />
-            <div className="flex flex-col items-center gap-2">
-              <Upload size={20} style={{ color: dragOver ? '#FF8A4C' : '#52525b' }} />
-              <p style={{ fontSize: 12, color: '#71717a' }}>
-                Drop a .csv file here or click to browse
-              </p>
-            </div>
+            {loading ? <div className="grid grid-cols-4 gap-3">{[0,1,2,3].map(i => <Shimmer key={i} h={72} />)}</div> : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                <Stat label="Recognition Awards" value={status?.recognition_count?.toLocaleString() ?? '0'} color="#FF8A4C" />
+                <Stat label="Categories" value={`${status?.recognition_categories ?? 0} / ${status?.recognition_subcategories ?? 0} sub`} color="#a78bfa" />
+                <Stat label="Unique Recipients" value={status?.unique_recipients?.toLocaleString() ?? '0'} color="#34d399" />
+                <Stat label="Unique Nominators" value={status?.unique_nominators?.toLocaleString() ?? '0'} color="#60a5fa" />
+              </div>
+            )}
+            {!loading && status?.employee_count ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12 }}>
+                <Stat label="Total Employees" value={status.employee_count.toLocaleString()} color="#fbbf24" />
+                <Stat label="Active" value={status.active_count.toLocaleString()} color="#34d399" />
+                <Stat label="Departed" value={status.departed_count.toLocaleString()} color="#fb7185" />
+                <Stat label="Last Loaded" value={status.loaded_at ? new Date(status.loaded_at).toLocaleDateString() : 'Never'} color="#71717a" />
+              </div>
+            ) : null}
+          </Panel>
+
+          {/* Quick Actions */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Panel delay={60}>
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,138,76,0.1)', border: '1px solid rgba(255,138,76,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <RefreshCw size={18} color="#FF8A4C" />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafafa' }}>Refresh Data</span>
+                <span style={{ fontSize: 11, color: '#52525b', textAlign: 'center' }}>Reload CSVs and recompute all analytics</span>
+                <button onClick={handleReload} disabled={reloading} style={{
+                  padding: '8px 20px', borderRadius: 9999, background: 'rgba(255,138,76,0.12)',
+                  border: '1px solid rgba(255,138,76,0.25)', color: '#FF8A4C', fontSize: 11, fontWeight: 700,
+                  cursor: reloading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {reloading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                  {reloading ? 'Refreshing...' : 'Refresh Now'}
+                </button>
+              </div>
+            </Panel>
+            <Panel delay={120}>
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={18} color="#a78bfa" />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafafa' }}>Generate Report</span>
+                <span style={{ fontSize: 11, color: '#52525b', textAlign: 'center' }}>AI-powered executive intelligence report</span>
+                <button onClick={() => { setTab('reports'); handleGenerate(); }} disabled={generating || !hasData} style={{
+                  padding: '8px 20px', borderRadius: 9999, background: 'rgba(167,139,250,0.12)',
+                  border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 11, fontWeight: 700,
+                  cursor: generating || !hasData ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {generating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  Generate
+                </button>
+              </div>
+            </Panel>
+            <Panel delay={180}>
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Download size={18} color="#34d399" />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafafa' }}>Export Data</span>
+                <span style={{ fontSize: 11, color: '#52525b', textAlign: 'center' }}>Download enriched dataset as ZIP</span>
+                <button onClick={handleExport} disabled={exporting || !hasData} style={{
+                  padding: '8px 20px', borderRadius: 9999, background: 'rgba(52,211,153,0.12)',
+                  border: '1px solid rgba(52,211,153,0.25)', color: '#34d399', fontSize: 11, fontWeight: 700,
+                  cursor: exporting || !hasData ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {exporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                  Export ZIP
+                </button>
+              </div>
+            </Panel>
           </div>
 
-          {/* File chip */}
-          {selectedFile && (
-            <div
-              className="flex items-center gap-3 mt-3"
-              style={{
-                padding: '8px 12px', borderRadius: 8,
-                background: 'rgba(255,138,76,0.06)', border: '1px solid rgba(255,138,76,0.12)',
-              }}
-            >
-              <FileText size={14} style={{ color: '#FF8A4C', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: '#d4d4d8', flex: 1 }}>{selectedFile.name}</span>
-              <span style={{ fontSize: 11, color: '#52525b' }}>{formatBytes(selectedFile.size)}</span>
-              <button
-                onClick={e => { e.stopPropagation(); setSelectedFile(null); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
-              >
-                <X size={13} style={{ color: '#71717a' }} />
-              </button>
-            </div>
-          )}
-
-          <div style={{ marginTop: 12 }}>
-            <OrangeButton onClick={handleUpload} disabled={!selectedFile} loading={uploading}>
-              {uploading ? 'Uploading...' : 'Upload & Process'}
-            </OrangeButton>
-          </div>
-        </Panel>
-
-        {/* Data Status */}
-        <Panel delay={80}>
-          <SectionHeader
-            icon={<Database size={14} />}
-            title="Data Status"
-            subtitle="Current dataset information"
-            action={
-              <button
-                onClick={handleReload}
-                disabled={reloading}
-                className="flex items-center gap-2"
-                style={{
-                  padding: '6px 12px', borderRadius: 10,
-                  background: 'rgba(255,138,76,0.1)', border: '1px solid rgba(255,138,76,0.2)',
-                  color: '#FF8A4C', fontSize: 11, fontWeight: 600,
-                  cursor: reloading ? 'not-allowed' : 'pointer',
-                  opacity: reloading ? 0.6 : 1,
-                }}
-              >
-                <RefreshCw size={12} className={reloading ? 'animate-spin' : ''} />
-                Reload Data
-              </button>
-            }
-          />
-
-          {statusLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map(n => (
-                <div key={n} className="h-5 rounded" style={{ background: 'rgba(255,255,255,0.04)', width: `${55 + n * 10}%`, animation: 'shimmer 2s infinite' }} />
+          {/* Pipeline Status */}
+          <Panel delay={240}>
+            <SectionHeader icon={<Zap size={14} />} title="Pipeline Status" subtitle="Data processing workflow" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {[
+                { label: 'Data Loaded', done: hasData, detail: hasData ? `${status?.recognition_count ?? 0} awards + ${status?.employee_count ?? 0} employees` : 'No data' },
+                { label: 'Taxonomy Built', done: (status?.recognition_categories ?? 0) > 0, detail: `${status?.recognition_categories ?? 0} categories, ${status?.recognition_subcategories ?? 0} sub` },
+                { label: 'Records Annotated', done: (status?.recognition_count ?? 0) > 0, detail: `${status?.recognition_count ?? 0} records` },
+                { label: 'Analytics Computed', done: hasData, detail: hasData ? 'All KPIs live' : 'Pending' },
+              ].map((step, i) => (
+                <div key={i} style={{
+                  padding: '16px 14px', borderRadius: 12, textAlign: 'center',
+                  background: step.done ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${step.done ? 'rgba(52,211,153,0.12)' : 'rgba(255,255,255,0.04)'}`,
+                }}>
+                  <div style={{ marginBottom: 8, color: step.done ? '#34d399' : '#52525b' }}>
+                    {step.done ? <CheckCircle2 size={20} /> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #52525b', margin: '0 auto' }} />}
+                  </div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: step.done ? '#fafafa' : '#71717a', marginBottom: 2 }}>{step.label}</p>
+                  <p style={{ fontSize: 10, color: '#52525b' }}>{step.detail}</p>
+                </div>
               ))}
             </div>
-          ) : status ? (
-            <div className="space-y-2">
-              <StatRow label="Employee Count" value={status.employee_count.toLocaleString()} color="#FF8A4C" />
-              <StatRow label="Active" value={status.active_count.toLocaleString()} color="#34d399" />
-              <StatRow label="Departed" value={status.departed_count.toLocaleString()} color="#fb7185" />
-              <StatRow label="History Records" value={status.history_count.toLocaleString()} color="#a78bfa" />
-              <StatRow
-                label="Last Loaded"
-                value={status.loaded_at ? new Date(status.loaded_at).toLocaleString() : 'Never'}
-                color="#71717a"
-              />
-              <div className="flex justify-end pt-1">
-                <Badge label={isLoaded ? 'Data loaded' : 'No data'} color={isLoaded ? '#34d399' : '#fb7185'} dot />
+          </Panel>
+        </div>
+      )}
+
+      {/* ═══════ UPLOAD TAB ═══════ */}
+      {tab === 'upload' && (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <Panel delay={0}>
+            <SectionHeader icon={<Upload size={14} />} title="Upload Dataset" subtitle="Drag and drop CSV files or click to browse" />
+            <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }}
+              onChange={e => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
+            {/* Drop zone */}
+            <div
+              onClick={() => fileRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'rgba(255,138,76,0.4)'; }}
+              onDragLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)'; }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)'; if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); }}
+              style={{
+                padding: '40px 20px', borderRadius: 16, textAlign: 'center', cursor: 'pointer',
+                border: '2px dashed rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.01)',
+                transition: 'border-color 200ms',
+              }}
+            >
+              <Upload size={28} style={{ color: '#52525b', margin: '0 auto 12px' }} />
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#a1a1aa' }}>Drop a CSV here or click to browse</p>
+              <p style={{ fontSize: 11, color: '#52525b', marginTop: 4 }}>Supports: recognition awards (.csv), workforce data (.csv)</p>
+            </div>
+
+            {/* File chip */}
+            {file && (
+              <div className="flex items-center gap-3 mt-3" style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,138,76,0.06)', border: '1px solid rgba(255,138,76,0.15)' }}>
+                <FileText size={16} color="#FF8A4C" />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{file.name}</p>
+                  <p style={{ fontSize: 10, color: '#52525b' }}>{(file.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <button onClick={() => setFile(null)} style={{ color: '#52525b', cursor: 'pointer', background: 'none', border: 'none' }}><X size={14} /></button>
+              </div>
+            )}
+
+            {/* Upload button */}
+            {file && (
+              <button onClick={handleUpload} disabled={uploading} style={{
+                marginTop: 12, width: '100%', padding: '12px 20px', borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(255,138,76,0.15), rgba(232,93,4,0.15))',
+                border: '1px solid rgba(255,138,76,0.25)', color: '#FF8A4C',
+                fontSize: 13, fontWeight: 700, cursor: uploading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+                {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                {uploading ? 'Processing...' : 'Upload & Process'}
+              </button>
+            )}
+          </Panel>
+
+          {/* Supported file formats */}
+          <Panel delay={60}>
+            <SectionHeader icon={<Database size={14} />} title="Supported Datasets" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,138,76,0.04)', border: '1px solid rgba(255,138,76,0.08)' }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#FF8A4C', marginBottom: 4 }}>Recognition Awards</p>
+                <p style={{ fontSize: 11, color: '#71717a', lineHeight: 1.5 }}>annotated_results.csv — message, award_title, recipient_title, nominator_title, category_id, subcategory</p>
+              </div>
+              <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(251,191,36,0.04)', border: '1px solid rgba(251,191,36,0.08)' }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: 4 }}>Workforce Data</p>
+                <p style={{ fontSize: 11, color: '#71717a', lineHeight: 1.5 }}>function_wh.csv — PK_PERSON, Hire, Expire, job_title, department_name, grade_title, country</p>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3 py-6" style={{ color: '#52525b' }}>
-              <AlertTriangle size={22} />
-              <p style={{ fontSize: 12 }}>No data loaded. Upload a CSV to begin.</p>
-            </div>
-          )}
-        </Panel>
-      </div>
+          </Panel>
+        </div>
+      )}
 
-      {/* ───────── Section 2: Pipeline Steps ───────── */}
-      <SectionHeader icon={<RefreshCw size={16} />} title="Pipeline Steps" />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-        <StepCard
-          icon={<Upload size={18} />}
-          title="Upload Data"
-          badge={isLoaded ? 'Complete' : 'Pending'}
-          badgeColor={isLoaded ? '#34d399' : '#52525b'}
-          delay={0}
-        />
-        <StepCard
-          icon={<Sparkles size={18} />}
-          title="Generate Taxonomy"
-          badge="Available"
-          badgeColor="#a78bfa"
-          delay={60}
-          action={
-            <div title="Requires Bedrock / OpenAI API key configured">
-              <OrangeButton onClick={() => {}} disabled>
-                Run (Requires LLM)
-              </OrangeButton>
-            </div>
-          }
-        />
-        <StepCard
-          icon={<FileText size={18} />}
-          title="Annotate Records"
-          badge={isLoaded ? `${status?.history_count ?? 0} records` : 'Pending'}
-          badgeColor={isLoaded ? '#34d399' : '#52525b'}
-          delay={120}
-        />
-        <StepCard
-          icon={<Database size={18} />}
-          title="Compute Analytics"
-          badge={isLoaded ? 'Ready' : 'Pending'}
-          badgeColor={isLoaded ? '#34d399' : '#52525b'}
-          delay={180}
-          action={
-            <OrangeButton onClick={handleRecompute} disabled={!isLoaded} loading={recomputing}>
-              {recomputing ? 'Computing...' : 'Recompute'}
-            </OrangeButton>
-          }
-        />
-      </div>
+      {/* ═══════ REPORTS TAB ═══════ */}
+      {tab === 'reports' && (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {/* Generate Report */}
+            <Panel delay={0}>
+              <SectionHeader icon={<Sparkles size={14} />} title="Intelligence Report" subtitle="AI-powered executive summary" />
+              <button onClick={handleGenerate} disabled={generating || !hasData} style={{
+                width: '100%', padding: '12px 20px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                background: generating ? 'rgba(255,255,255,0.04)' : 'linear-gradient(135deg, rgba(255,138,76,0.15), rgba(232,93,4,0.15))',
+                border: `1px solid ${generating ? 'rgba(255,255,255,0.06)' : 'rgba(255,138,76,0.25)'}`,
+                color: generating ? '#71717a' : '#FF8A4C', fontSize: 13, fontWeight: 600, cursor: generating || !hasData ? 'not-allowed' : 'pointer',
+              }}>
+                {generating ? <><Loader2 size={15} className="animate-spin" /> Generating...</> : <><Sparkles size={15} /> Generate Intelligence Report</>}
+              </button>
+            </Panel>
 
-      {/* ───────── Section 3: Reports & Export ───────── */}
-      <SectionHeader icon={<FileText size={16} />} title="Reports & Export" />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {/* Export */}
+            <Panel delay={60}>
+              <SectionHeader icon={<Download size={14} />} title="Export Data Package" subtitle="Download enriched dataset as ZIP" />
+              <button onClick={handleExport} disabled={exporting || !hasData} style={{
+                width: '100%', padding: '12px 20px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                background: exporting ? 'rgba(255,255,255,0.04)' : 'rgba(52,211,153,0.1)',
+                border: `1px solid ${exporting ? 'rgba(255,255,255,0.06)' : 'rgba(52,211,153,0.2)'}`,
+                color: exporting ? '#71717a' : '#34d399', fontSize: 13, fontWeight: 600, cursor: exporting || !hasData ? 'not-allowed' : 'pointer',
+              }}>
+                {exporting ? <><Loader2 size={15} className="animate-spin" /> Preparing...</> : <><Download size={15} /> Export Data Package</>}
+              </button>
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.02)' }}>
+                <p style={{ fontSize: 11, color: '#52525b', lineHeight: 1.6 }}>
+                  Includes: employees.csv, history.csv, active_employees.csv, departed_employees.csv, department_summary.csv, README.txt
+                </p>
+              </div>
+            </Panel>
+          </div>
 
-        {/* Intelligence Report */}
-        <Panel delay={0}>
-          <SectionHeader icon={<Sparkles size={14} />} title="Intelligence Report" subtitle="AI-powered workforce analysis" />
-          <OrangeButton onClick={handleGenerateReport} loading={generating}>
-            {generating ? 'Generating...' : 'Generate Report'}
-          </OrangeButton>
-
+          {/* Report Rendering */}
           {generating && (
-            <div className="flex flex-col items-center gap-3 py-8">
-              <Loader2 size={28} style={{ color: '#FF8A4C' }} className="animate-spin" />
-              <p style={{ fontSize: 12, color: '#52525b' }}>Analyzing workforce data...</p>
-            </div>
+            <Panel delay={120}>
+              <div className="flex flex-col items-center gap-4 py-12">
+                <div className="fire-orb" style={{ width: 48, height: 48 }} />
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#fafafa' }}>Analyzing data...</p>
+                <p style={{ fontSize: 12, color: '#52525b' }}>Generating executive intelligence report</p>
+              </div>
+            </Panel>
           )}
 
           {report && !generating && (
-            <div style={{ marginTop: 16 }}>
-              {/* Executive Summary */}
-              <div style={{
-                padding: '14px 16px', borderRadius: 12, marginBottom: 12,
-                background: 'rgba(255,138,76,0.04)', border: '1px solid rgba(255,138,76,0.1)',
-              }}>
-                <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#FF8A4C', marginBottom: 6 }}>
-                  Executive Summary
-                </p>
-                <p style={{ fontSize: 12, lineHeight: 1.7, color: '#a1a1aa', whiteSpace: 'pre-wrap' }}>
-                  {report.executive_summary}
-                </p>
+            <Panel delay={120}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, color: '#fafafa', letterSpacing: '-0.02em' }}>{report.title}</h2>
+                  <p style={{ fontSize: 11, color: '#52525b', marginTop: 2 }}>Generated {new Date(report.generated_at).toLocaleString()}</p>
+                </div>
               </div>
-
+              {/* Executive Summary */}
+              <div style={{ padding: '16px 20px', borderRadius: 12, background: 'rgba(255,138,76,0.04)', border: '1px solid rgba(255,138,76,0.1)', marginBottom: 16 }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="fire-orb" style={{ width: 18, height: 18 }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#FF8A4C' }}>Executive Summary</span>
+                </div>
+                <p style={{ fontSize: 13, lineHeight: 1.7, color: '#a1a1aa', whiteSpace: 'pre-wrap' }}>{report.executive_summary}</p>
+              </div>
               {/* Sections */}
-              {report.sections.map((section, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: '12px 14px', borderRadius: 10, marginBottom: 10,
-                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)',
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp size={12} style={{ color: '#FF8A4C' }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#fafafa' }}>{section.title}</span>
-                  </div>
-                  {section.key_metrics.length > 0 && (
-                    <div className="flex flex-wrap gap-3 mb-2">
-                      {section.key_metrics.map((m, mi) => (
-                        <div key={mi} className="flex items-center gap-1">
-                          <span style={{ fontSize: 10, color: '#52525b' }}>{m.label}:</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#fafafa' }}>{m.value}</span>
-                          {m.change && <span style={{ fontSize: 10, color: '#fb7185' }}>{m.change}</span>}
+              {(report.sections || []).map((s: any, i: number) => (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#fafafa', marginBottom: 8 }}>{s.title}</h3>
+                  {s.key_metrics?.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(s.key_metrics.length, 4)}, 1fr)`, gap: 10, marginBottom: 10 }}>
+                      {s.key_metrics.map((m: any, mi: number) => (
+                        <div key={mi} style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                          <p style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', color: '#52525b', marginBottom: 2 }}>{m.label}</p>
+                          <p style={{ fontSize: 16, fontWeight: 800, color: '#fafafa' }}>{m.value}</p>
                         </div>
                       ))}
                     </div>
                   )}
-                  <p style={{ fontSize: 12, lineHeight: 1.6, color: '#71717a' }}>{section.narrative}</p>
+                  <p style={{ fontSize: 12, lineHeight: 1.6, color: '#a1a1aa' }}>{s.narrative}</p>
                 </div>
               ))}
-
               {/* Recommendations */}
-              {report.recommendations.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a78bfa', marginBottom: 8 }}>
-                    Recommendations
-                  </p>
-                  {report.recommendations.map((rec, ri) => (
-                    <div key={ri} className="flex items-start gap-2" style={{
-                      padding: '10px 12px', borderRadius: 8, marginBottom: 6,
-                      background: 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${(priorityColor[rec.priority] || '#71717a')}20`,
-                    }}>
-                      <Badge label={rec.priority} color={priorityColor[rec.priority] || '#71717a'} />
+              {(report.recommendations || []).length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#fafafa', marginBottom: 8 }}>Recommendations</h3>
+                  {report.recommendations.map((r: any, ri: number) => (
+                    <div key={ri} className="flex items-start gap-3" style={{ padding: '10px 14px', marginBottom: 6, borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <Badge label={r.priority} color={r.priority === 'critical' ? '#fb7185' : r.priority === 'high' ? '#fbbf24' : '#a78bfa'} />
                       <div>
-                        <p style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{rec.title}</p>
-                        <p style={{ fontSize: 11, color: '#52525b', marginTop: 2 }}>{rec.detail}</p>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: '#fafafa' }}>{r.title}</p>
+                        <p style={{ fontSize: 11, color: '#52525b', marginTop: 2 }}>{r.detail}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-
-              {/* Copy button */}
-              <button
-                onClick={handleCopyReport}
-                className="flex items-center gap-2 mt-3"
-                style={{
-                  padding: '7px 14px', borderRadius: 8,
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-                  color: copied ? '#34d399' : '#a1a1aa', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                {copied ? <><CheckCircle2 size={12} /> Copied</> : <><ClipboardCopy size={12} /> Copy Report</>}
-              </button>
-            </div>
+            </Panel>
           )}
-        </Panel>
-
-        {/* Export Data */}
-        <Panel delay={80}>
-          <SectionHeader icon={<Download size={14} />} title="Export Data" subtitle="Download workforce data bundle" />
-          <button
-            onClick={handleExport}
-            style={{
-              width: '100%', padding: '12px 20px', borderRadius: 12,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)',
-              color: '#34d399', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            <Download size={15} /> Export Full Dataset
-          </button>
-
-          <div style={{ marginTop: 16 }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#52525b', marginBottom: 8 }}>
-              Included in Export
-            </p>
-            {['employees.csv', 'history.csv', 'analytics_summary.json', 'taxonomy.json'].map(f => (
-              <div
-                key={f}
-                className="flex items-center gap-2"
-                style={{
-                  padding: '8px 12px', borderRadius: 8, marginBottom: 4,
-                  background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)',
-                }}
-              >
-                <FileText size={12} style={{ color: '#52525b' }} />
-                <span style={{ fontSize: 12, color: '#a1a1aa' }}>{f}</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import {
   BarChart, Bar, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts';
-import { LayoutDashboard, Award, GitFork, Target, Shuffle, Zap, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Award, GitFork, Target, Shuffle, Zap, AlertTriangle, Users } from 'lucide-react';
 import api from '../lib/api';
 import { PageHero } from '../components/ui/PageHero';
 import { Panel } from '../components/ui/Panel';
@@ -89,6 +89,7 @@ export function Dashboard() {
   const [topRoles, setTopRoles] = useState<TopRole[]>([]);
   const [nominators, setNominators] = useState<Nominator[]>([]);
   const [flowData, setFlowData] = useState<FlowDirection[]>([]);
+  const [gradePyramid, setGradePyramid] = useState<{ grade: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -109,6 +110,11 @@ export function Dashboard() {
         setNominators((nomRes.data?.blind_spots || []).slice(0, 10));
         const dirSplit = flowRes.data?.direction_split || {};
         setFlowData(Object.entries(dirSplit).map(([d, c]) => ({ direction: d, count: c as number })));
+        // Grade pyramid from workforce API (optional, may fail if no workforce data)
+        try {
+          const gradeRes = await api.get('/api/workforce/grade-pyramid');
+          setGradePyramid((gradeRes.data?.pyramid || gradeRes.data || []).slice(0, 12));
+        } catch { /* workforce data may not be loaded */ }
       } catch (err) {
         console.error('Dashboard load error', err);
       } finally {
@@ -308,8 +314,31 @@ export function Dashboard() {
         </Panel>
       </div>
 
+      {/* Grade Pyramid — Workforce Distribution */}
+      {gradePyramid.length > 0 && (
+        <Panel delay={480} className="mb-4">
+          <SectionHeader
+            icon={<Users size={14} />}
+            title="Grade Pyramid"
+            subtitle="Workforce distribution by grade level"
+            action={<Badge label={`${gradePyramid.length} grades`} color="#a78bfa" />}
+          />
+          <ResponsiveContainer width="100%" height={Math.max(200, gradePyramid.length * 32)}>
+            <BarChart data={gradePyramid} layout="vertical" margin={{ left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
+              <XAxis type="number" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="grade" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} width={60} />
+              <Tooltip content={<ChartTooltip />} />
+              <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={16} name="Headcount">
+                {gradePyramid.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
+
       {/* Blind Spot Nominators Table */}
-      <Panel delay={480}>
+      <Panel delay={540}>
         <SectionHeader
           icon={<AlertTriangle size={14} />}
           title="Blind Spot Nominators"
