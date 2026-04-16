@@ -5,11 +5,15 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 import json
+import logging
+import asyncio
 
 from ..llm import llm_call, is_llm_available
 from .knowledge_base import search as kb_search
 from .memory_manager import memory_manager
 from .analytics_engine import get_analytics_engine
+
+logger = logging.getLogger(__name__)
 
 class AgentState(TypedDict):
     messages: Annotated[List[Dict[str, str]], add_messages]
@@ -51,18 +55,24 @@ class BrainAgent:
         return graph.compile()
     
     def _router_node(self, state: AgentState) -> AgentState:
-        """Classify user intent."""
+        """Classify user intent based on message content."""
         msg = state["messages"][-1]["content"] if state["messages"] else ""
-        
-        # Simple intent classification
-        if any(x in msg.lower() for x in ["what", "how many", "count", "metric", "number"]):
-            intent = "analytics"
-        elif any(x in msg.lower() for x in ["define", "explain", "meaning", "benchmark", "about"]):
+        msg_lower = msg.lower()
+
+        # Intent classification with weighted keywords
+        analytics_keywords = ["what", "how many", "count", "metric", "number", "total", "show", "compare", "trend", "rate"]
+        knowledge_keywords = ["define", "explain", "meaning", "benchmark", "about", "describe", "what is", "tell me"]
+
+        analytics_score = sum(1 for kw in analytics_keywords if kw in msg_lower)
+        knowledge_score = sum(1 for kw in knowledge_keywords if kw in msg_lower)
+
+        if knowledge_score > analytics_score:
             intent = "knowledge"
         else:
             intent = "analytics"
-        
-        state["thinking"] = f"Intent detected: {intent}"
+
+        state["thinking"] = f"Intent detected: {intent} (analytics_score={analytics_score}, knowledge_score={knowledge_score})"
+        logger.debug(f"Intent routing: {state['thinking']}")
         return state
     
     def _decide_route(self, state: AgentState) -> str:
@@ -117,27 +127,40 @@ class BrainAgent:
     def _respond_node(self, state: AgentState) -> AgentState:
         """Generate response using LLM."""
         if not is_llm_available():
+            logger.warning("LLM not available, returning fallback response")
             state["messages"].append({
                 "role": "assistant",
-                "content": "LLM not available"
+                "content": "LLM service is not available. Please configure an API key (OpenAI or OpenRouter)."
             })
             return state
-        
+
         system_prompt = """You are the Workforce IQ analytics assistant. You have access to:
 - Complete workforce data (headcount, tenure, career progression, org structure)
 - Recognition data (peer awards, culture insights, engagement signals)
 - Live KPI computations
 
 Answer questions directly and data-driven. Lead with numbers. Contextualize insights."""
-        
+
         user_msg = state["messages"][-1]["content"] if state["messages"] else "Hello"
-        
+
         try:
-            import asyncio
-            response = asyncio.run(llm_call(system_prompt, user_msg, max_tokens=500))
-        except:
-            response = "Unable to generate response"
-        
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            response = loop.run_until_complete(
+                llm_call(system_prompt, user_msg, max_tokens=500)
+            )
+            loop.close()
+            logger.debug(f"LLM response generated successfully ({len(response)} chars)")
+        except ValueError as e:
+            logger.error(f"LLM configuration error: {e}")
+            response = f"LLM Error: {str(e)}"
+        except asyncio.TimeoutError:
+            logger.error("LLM request timed out")
+            response = "Request timed out. Please try again."
+        except Exception as e:
+            logger.error(f"Unexpected error generating LLM response: {type(e).__name__}: {e}")
+            response = "Unable to generate response due to an error. Please try again."
+
         state["messages"].append({
             "role": "assistant",
             "content": response
@@ -146,21 +169,44 @@ Answer questions directly and data-driven. Lead with numbers. Contextualize insi
     
     def process_message(self, user_id: str, message: str, current_page: Optional[str] = None) -> str:
         """Process a user message and return response."""
-        state: AgentState = {
-            "messages": [{"role": "user", "content": message}],
-            "user_id": user_id,
-            "current_page": current_page or "dashboard",
-            "thinking": ""
-        }
-        
-        result = self.graph.invoke(state)
-        
-        # Extract last assistant message
-        for msg in reversed(result["messages"]):
-            if msg.get("role") == "assistant":
-                return msg.get("content", "No response")
-        
-        return "No response generated"
+        # Input validation
+        if not message or not isinstance(message, str):
+            logger.warning(f"Invalid message from {user_id}: empty or not string")
+            return "Please provide a valid message."
+
+        if len(message.strip()) == 0:
+            return "Please ask a question about your workforce data."
+
+        if len(message) > 5000:
+            logger.warning(f"Message too long from {user_id}: {len(message)} chars")
+            return "Message is too long. Please ask a shorter question."
+
+        if not user_id or not isinstance(user_id, str):
+            user_id = "default_user"
+
+        try:
+            state: AgentState = {
+                "messages": [{"role": "user", "content": message}],
+                "user_id": user_id,
+                "current_page": current_page or "dashboard",
+                "thinking": ""
+            }
+
+            logger.info(f"Processing message from {user_id}: {message[:100]}...")
+            result = self.graph.invoke(state)
+
+            # Extract last assistant message
+            for msg in reversed(result["messages"]):
+                if msg.get("role") == "assistant":
+                    response = msg.get("content", "No response")
+                    logger.info(f"Generated response for {user_id}: {len(response)} chars")
+                    return response
+
+            logger.warning(f"No assistant message found in result for {user_id}")
+            return "Unable to generate a response. Please try again."
+        except Exception as e:
+            logger.error(f"Error processing message from {user_id}: {type(e).__name__}: {e}")
+            return f"An error occurred while processing your request: {str(e)}"
 
 _brain_agent: Optional[BrainAgent] = None
 

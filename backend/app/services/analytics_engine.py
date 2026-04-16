@@ -3,6 +3,9 @@
 import pandas as pd
 import numpy as np
 from typing import Any, Dict, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AnalyticsEngine:
     """Query interface for live KPI computation."""
@@ -12,18 +15,29 @@ class AnalyticsEngine:
     
     def query(self, query_type: str, **params) -> Dict[str, Any]:
         """Execute analytics query and return structured data."""
-        emp_df = self.data_cache.get("employees")
-        if emp_df is None or len(emp_df) == 0:
-            return {"error": "No workforce data loaded"}
+        try:
+            emp_df = self.data_cache.get("employees")
+            if emp_df is None or len(emp_df) == 0:
+                logger.warning(f"Query {query_type} attempted with no workforce data loaded")
+                return {"error": "No workforce data loaded"}
+        except Exception as e:
+            logger.error(f"Error accessing employees dataframe: {e}")
+            return {"error": "Data access error"}
         
         if query_type == "headcount_summary":
-            active = emp_df["is_active"].sum()
-            return {
-                "total": len(emp_df),
-                "active": int(active),
-                "departed": int(len(emp_df) - active),
-                "turnover_rate": round(100 * (len(emp_df) - active) / len(emp_df), 1)
-            }
+            try:
+                active = emp_df["is_active"].sum()
+                result = {
+                    "total": len(emp_df),
+                    "active": int(active),
+                    "departed": int(len(emp_df) - active),
+                    "turnover_rate": round(100 * (len(emp_df) - active) / len(emp_df), 1)
+                }
+                logger.debug(f"Headcount summary: {result}")
+                return result
+            except Exception as e:
+                logger.error(f"Error computing headcount summary: {e}")
+                return {"error": str(e)}
         
         if query_type == "headcount_by_dept":
             by_dept = emp_df[emp_df["is_active"]].groupby("department_name").size().sort_values(ascending=False)
