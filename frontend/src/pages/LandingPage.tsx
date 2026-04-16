@@ -355,9 +355,10 @@ function Orb({ size = 100 }: { size?: number }) {
 
 // ─── Data ───
 const TEAM = [
-  { name: "Chirag Verma", role: "Project Lead · Full-Stack", li: "https://www.linkedin.com/in/vkin/", init: "CV", col: "#FF8A4C" },
-  { name: "Arav Pandey", role: "Data Science · ML", li: "https://www.linkedin.com/in/aravpandey/", init: "AP", col: "#a78bfa" },
-  { name: "Rohan Reddy Kolla", role: "Backend · Analytics", li: "https://www.linkedin.com/in/rohan-reddy-kolla/", init: "RK", col: "#34d399" },
+  { name: "Chirag Verma", li: "https://www.linkedin.com/in/vkin/", init: "CV", col: "#FF8A4C" },
+  { name: "Arav Pandey", li: "https://www.linkedin.com/in/aravpandey/", init: "AP", col: "#a78bfa" },
+  { name: "Rohan Reddy Kolla", li: "https://www.linkedin.com/in/rohan-reddy-kolla/", init: "RK", col: "#34d399" },
+  { name: "Kashyap Akula", li: "https://www.linkedin.com/in/kashyap-akula-804937210/", init: "KA", col: "#60a5fa" },
 ];
 
 const FEATURES = [
@@ -600,7 +601,7 @@ export default function LandingPage() {
         {/* ═══ TEAM ═══ */}
         <section id="team" style={{ padding: "80px 24px 180px", maxWidth: 900, margin: "0 auto" }}>
           <RevealHeading label="The Team" heading={<>Built by Engineers,<br />for <em style={{ fontStyle: "italic" }}>HR Leaders</em></>} sub="Northeastern University MS Capstone (IE 7945) in partnership with Workhuman — Spring 2026" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
             {TEAM.map((m, i) => (
               <Glass key={i} delay={i * 140} style={{ textAlign: "center", padding: "44px 24px", borderRadius: 28 }}>
                 <a href={m.li} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
@@ -616,7 +617,6 @@ export default function LandingPage() {
                     <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 800, color: m.col }}>{m.init}</span>
                   </div>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: "#fafafa" }}>{m.name}</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#52525b", marginTop: 6 }}>{m.role}</div>
                   <div style={{
                     fontFamily: "'DM Sans',sans-serif", marginTop: 18, display: "inline-flex", alignItems: "center", gap: 6,
                     padding: "7px 16px", borderRadius: 9999, background: "rgba(255,255,255,0.03)",
