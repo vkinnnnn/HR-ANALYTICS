@@ -2,35 +2,51 @@ version: '3.8'
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hr-analytics-backend
     ports:
-      - "8000:8000"
+      - "8119:8119"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - CHROMA_PERSIST_DIR=./chroma_data
-      - DATABASE_URL=sqlite+aiosqlite:///./hr_platform.db
+      - DATABASE_URL=sqlite:///./app.db
+      - DATA_DIR=/app/wh_Dataset
+      - CORS_ORIGINS=http://localhost:3000
     volumes:
-      - ./wh_Dataset:/app/wh_Dataset
-      - ./chroma_data:/app/chroma_data
+      - ./backend:/app
+      - ./wh_Dataset:/app/wh_Dataset:ro
+      - backend_data:/app/data
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8119
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/brain/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8119/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
+    networks:
+      - hr-analytics
 
   frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
+    container_name: hr-analytics-frontend
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://backend:8119
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
     depends_on:
       - backend
+    networks:
+      - hr-analytics
 
 volumes:
-  chroma_data:
+  backend_data:
 
+networks:
+  hr-analytics:
+    driver: bridge
