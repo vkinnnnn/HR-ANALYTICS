@@ -1,0 +1,31 @@
+# ── Core Framework ──
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+sqlalchemy[asyncio]==2.0.31
+aiosqlite==0.20.0
+pydantic-settings==2.3.4
+
+# ── Data ──
+pandas==2.2.2
+numpy>=1.26.0,<2.1.0
+scikit-learn==1.5.2
+openpyxl>=3.1.0
+
+# ── ML/NLP (CPU-only PyTorch saves 1.5GB)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1+cpu
+sentence-transformers==3.1.1
+
+# ── Vector Store ──
+chromadb==0.5.23
+
+# ── LLM ──
+openai>=1.55.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+langchain-text-splitters>=0.3.0
+langgraph>=0.2.0
+
+# ── Graph ──
+networkx>=3.3

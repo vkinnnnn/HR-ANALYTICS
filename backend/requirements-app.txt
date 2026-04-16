@@ -1,0 +1,13 @@
+# ── API utilities ──
+python-multipart==0.0.9
+python-dotenv==1.0.1
+orjson>=3.10.0
+sse-starlette>=2.0.0
+httpx>=0.27.0
+
+# ── File processing ──
+PyMuPDF>=1.24.0
+Pillow>=10.0.0
+
+# ── Analytics ──
+umap-learn==0.5.6
