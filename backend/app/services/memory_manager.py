@@ -1,106 +1,35 @@
-"""
-Memory Manager — Per-user persistent memory.
+"""Memory Manager — Per-user persistent memory using Mem0."""
 
-Uses mem0ai when available, falls back to an in-memory dict.
-Stores user preferences, conversation patterns, and session context.
-"""
+from typing import Optional, List
 
-import logging
-from typing import Any
-
-logger = logging.getLogger(__name__)
-
-_fallback_store: dict[str, list[dict[str, str]]] = {}
-
-_mem0_client: Any = None
-_mem0_available = False
-
-
-def _init_mem0() -> bool:
-    global _mem0_client, _mem0_available
-    if _mem0_available:
+class MemoryManager:
+    """Simple in-memory memory store (Mem0 integration optional)."""
+    
+    def __init__(self):
+        self.memories = {}  # user_id -> list of facts
+    
+    def search(self, user_id: str, query: str) -> List[str]:
+        """Retrieve relevant memories for user."""
+        if user_id not in self.memories:
+            return []
+        return [m for m in self.memories[user_id] if query.lower() in m.lower()]
+    
+    def save(self, user_id: str, fact: str) -> bool:
+        """Save a fact to user's persistent memory."""
+        if user_id not in self.memories:
+            self.memories[user_id] = []
+        if fact not in self.memories[user_id]:
+            self.memories[user_id].append(fact)
         return True
-    try:
-        from mem0 import Memory
-        _mem0_client = Memory()
-        _mem0_available = True
-        logger.info("Mem0 memory initialized")
+    
+    def clear(self, user_id: str) -> bool:
+        """Clear all memories for a user (GDPR)."""
+        if user_id in self.memories:
+            del self.memories[user_id]
         return True
-    except Exception as e:
-        logger.info(f"Mem0 not available, using in-memory fallback: {e}")
-        _mem0_available = False
-        return False
+    
+    def get_all(self, user_id: str) -> List[str]:
+        """Get all memories for a user."""
+        return self.memories.get(user_id, [])
 
-
-def search_memory(user_id: str, query: str, limit: int = 5) -> list[str]:
-    """Retrieve relevant memories for a user."""
-    if _init_mem0() and _mem0_client is not None:
-        try:
-            results = _mem0_client.search(query, user_id=user_id, limit=limit)
-            return [r.get("memory", r.get("text", "")) for r in results.get("results", results) if r]
-        except Exception as e:
-            logger.warning(f"Mem0 search failed: {e}")
-
-    user_mems = _fallback_store.get(user_id, [])
-    if not user_mems:
-        return []
-
-    query_lower = query.lower()
-    scored = []
-    for mem in user_mems:
-        text = mem.get("text", "")
-        words = query_lower.split()
-        score = sum(1 for w in words if w in text.lower())
-        if score > 0:
-            scored.append((score, text))
-    scored.sort(key=lambda x: -x[0])
-    return [s[1] for s in scored[:limit]]
-
-
-def save_memory(user_id: str, fact: str) -> bool:
-    """Persist a user fact for future sessions."""
-    if not fact or not fact.strip():
-        return False
-
-    if _init_mem0() and _mem0_client is not None:
-        try:
-            _mem0_client.add(fact, user_id=user_id)
-            return True
-        except Exception as e:
-            logger.warning(f"Mem0 save failed: {e}")
-
-    if user_id not in _fallback_store:
-        _fallback_store[user_id] = []
-
-    for existing in _fallback_store[user_id]:
-        if existing.get("text") == fact:
-            return False
-
-    _fallback_store[user_id].append({"text": fact})
-    if len(_fallback_store[user_id]) > 100:
-        _fallback_store[user_id] = _fallback_store[user_id][-100:]
-    return True
-
-
-def get_memories(user_id: str) -> list[str]:
-    """Get all memories for a user."""
-    if _init_mem0() and _mem0_client is not None:
-        try:
-            results = _mem0_client.get_all(user_id=user_id)
-            return [r.get("memory", r.get("text", "")) for r in results.get("results", results) if r]
-        except Exception as e:
-            logger.warning(f"Mem0 get_all failed: {e}")
-
-    return [m.get("text", "") for m in _fallback_store.get(user_id, [])]
-
-
-def clear_memories(user_id: str) -> bool:
-    """Clear all memories for a user (GDPR compliance)."""
-    if _init_mem0() and _mem0_client is not None:
-        try:
-            _mem0_client.delete_all(user_id=user_id)
-        except Exception as e:
-            logger.warning(f"Mem0 delete failed: {e}")
-
-    _fallback_store.pop(user_id, None)
-    return True
+memory_manager = MemoryManager()

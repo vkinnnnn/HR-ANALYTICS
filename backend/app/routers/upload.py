@@ -1,15 +1,20 @@
 """
-Upload Router — CSV file upload, data reload, and loading status.
+Upload Router — CSV file upload, pipeline orchestration, data reload, and loading status.
 """
 
 import os
 import shutil
+import asyncio
 from datetime import datetime
+from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 
-from ..data_loader import get_employees, get_history, is_loaded, load_and_process
-from ..recognition_loader import load_recognition, is_recognition_loaded, get_recognition
+from ..data_loader import get_employees, get_history, is_loaded, load_and_process, load_recognition, is_recognition_loaded, get_recognition, _data_cache
+from ..services.knowledge_base import rebuild_knowledge_base
+from ..services.pipeline_orchestrator import pipeline_orchestrator
+from ..services.file_processor import process_file
 from ..cache import invalidate_all as _invalidate_cache
 
 router = APIRouter()
@@ -20,6 +25,15 @@ UPLOAD_DIR = os.environ.get(
 )
 
 _upload_metadata: dict = {}
+_pipeline_state: Dict[str, Any] = {
+    "status": "idle",  # idle, running, completed, failed
+    "current_stage": None,
+    "progress_percent": 0,
+    "file": None,
+    "error": None,
+    "start_time": None,
+    "end_time": None,
+}
 
 
 @router.post("/csv")
@@ -148,3 +162,88 @@ async def reload_data():
         "departed_count": int((~emp_df["is_active"]).sum()),
         "reloaded_at": datetime.now().isoformat(),
     }
+
+
+@router.post("/pipeline/run")
+async def run_pipeline(file: Optional[UploadFile] = File(None)):
+    """Execute full pipeline: parse → validate → taxonomy → enrich → knowledge base rebuild."""
+    global _pipeline_state
+
+    if _pipeline_state["status"] == "running":
+        raise HTTPException(status_code=409, detail="Pipeline already running")
+
+    _pipeline_state = {
+        "status": "running",
+        "current_stage": "validating",
+        "progress_percent": 0,
+        "file": file.filename if file else "default",
+        "error": None,
+        "start_time": datetime.now().isoformat(),
+        "end_time": None,
+    }
+
+    try:
+        # ── Stage 1: Validate file or use default data ──
+        csv_path = None
+        if file:
+            os.makedirs(UPLOAD_DIR, exist_ok=True)
+            csv_path = os.path.join(UPLOAD_DIR, file.filename)
+            contents = await file.read()
+            with open(csv_path, "wb") as f:
+                f.write(contents)
+            _pipeline_state["progress_percent"] = 10
+            _pipeline_state["current_stage"] = "processing"
+
+        # ── Stage 2: Load and process data ──
+        def progress_callback(stage: str, percent: int):
+            _pipeline_state["current_stage"] = stage
+            _pipeline_state["progress_percent"] = percent
+
+        load_and_process(UPLOAD_DIR)
+        progress_callback("taxonomy", 50)
+
+        # ── Stage 3: Load recognition data ──
+        load_recognition(UPLOAD_DIR)
+        progress_callback("enrichment", 75)
+
+        # ── Stage 4: Rebuild knowledge base ──
+        _invalidate_cache()
+        doc_count = rebuild_knowledge_base(_data_cache)
+        progress_callback("knowledge_base", 95)
+
+        _pipeline_state = {
+            "status": "completed",
+            "current_stage": "complete",
+            "progress_percent": 100,
+            "file": _pipeline_state["file"],
+            "error": None,
+            "start_time": _pipeline_state["start_time"],
+            "end_time": datetime.now().isoformat(),
+        }
+
+        emp_df = get_employees()
+        return {
+            "status": "completed",
+            "employee_count": len(emp_df),
+            "document_count": doc_count,
+            "pipeline_completed_at": _pipeline_state["end_time"],
+            "message": "Data loaded, taxonomy generated, knowledge base rebuilt",
+        }
+
+    except Exception as e:
+        _pipeline_state = {
+            "status": "failed",
+            "current_stage": "error",
+            "progress_percent": _pipeline_state.get("progress_percent", 0),
+            "file": _pipeline_state["file"],
+            "error": str(e),
+            "start_time": _pipeline_state["start_time"],
+            "end_time": datetime.now().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=f"Pipeline failed: {str(e)}")
+
+
+@router.get("/pipeline/status")
+async def get_pipeline_status():
+    """Check pipeline execution status and progress."""
+    return _pipeline_state

@@ -1,155 +1,167 @@
-import { useState, useRef, useCallback } from 'react';
-import { Send, Paperclip } from 'lucide-react';
-import { VoiceButton } from './VoiceButton';
-import { FilePreview } from './FilePreview';
-
-const ACCEPTED_TYPES = '.csv,.xlsx,.xls,.pdf,.docx,.txt,.md,.json,.png,.jpg,.jpeg';
+import React, { useRef, useState, useEffect } from 'react';
+import { Send, Paperclip, Mic, X } from 'lucide-react';
 
 interface ChatInputProps {
-  onSend: (text: string, files?: File[]) => void;
-  isLoading: boolean;
-  placeholder?: string;
+  onSend: (message: string, files?: File[]) => void;
+  isLoading?: boolean;
+  disabled?: boolean;
 }
 
-export function ChatInput({ onSend, isLoading, placeholder = 'Ask about your workforce...' }: ChatInputProps) {
-  const [text, setText] = useState('');
+export const ChatInput: React.FC<ChatInputProps> = ({
+  onSend,
+  isLoading = false,
+  disabled = false,
+}) => {
+  const [message, setMessage] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const handleSend = useCallback(() => {
-    const trimmed = text.trim();
-    if (!trimmed && files.length === 0) return;
-    if (isLoading) return;
-    onSend(trimmed, files.length > 0 ? files : undefined);
-    setText('');
-    setFiles([]);
+  // Auto-expand textarea
+  useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = '40px';
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
-  }, [text, files, isLoading, onSend]);
+  }, [message]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleSend = () => {
+    if (!message.trim() || isLoading) return;
+    onSend(message, files.length > 0 ? files : undefined);
+    setMessage('');
+    setFiles([]);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files));
+    }
+  };
+
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([blob], 'voice.webm', { type: 'audio/webm' });
+        setFiles([audioFile]);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Microphone access denied:', error);
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  }, [handleSend]);
-
-  const handleInput = useCallback(() => {
-    const el = textareaRef.current;
-    if (el) {
-      el.style.height = '40px';
-      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-    }
-  }, []);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files || []);
-    setFiles(prev => [...prev, ...selected]);
-    e.target.value = '';
-  }, []);
-
-  const removeFile = useCallback((index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleVoiceTranscript = useCallback((transcript: string) => {
-    setText(prev => (prev ? prev + ' ' : '') + transcript);
-    textareaRef.current?.focus();
-  }, []);
-
-  const canSend = (text.trim().length > 0 || files.length > 0) && !isLoading;
+  };
 
   return (
-    <div>
-      <FilePreview files={files} onRemove={removeFile} />
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: 4,
-          padding: '6px 8px',
-          borderRadius: 14,
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          transition: 'border-color 200ms',
-        }}
-      >
+    <div className="border-t border-gray-700 bg-[#09090b] p-4">
+      {/* File previews */}
+      {files.length > 0 && (
+        <div className="mb-3 flex gap-2 flex-wrap">
+          {files.map((file, idx) => (
+            <div
+              key={idx}
+              className="inline-flex items-center gap-2 bg-[#131318] border border-gray-600 rounded-lg px-3 py-2"
+            >
+              <Paperclip size={14} className="text-gray-400" />
+              <span className="text-xs text-gray-300">{file.name}</span>
+              <button
+                onClick={() => setFiles(files.filter((_, i) => i !== idx))}
+                className="text-gray-500 hover:text-gray-300"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div className="flex gap-3 items-end">
+        {/* Paperclip button */}
         <button
-          type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isLoading}
-          title="Attach file"
-          style={{
-            width: 32, height: 32, borderRadius: 8,
-            border: 'none', background: 'transparent',
-            color: '#71717a', cursor: isLoading ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: isLoading ? 0.4 : 1,
-          }}
+          disabled={disabled}
+          className="text-gray-400 hover:text-[#FF8A4C] transition-colors disabled:opacity-50"
         >
-          <Paperclip size={15} />
+          <Paperclip size={20} />
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPTED_TYPES}
           multiple
+          hidden
           onChange={handleFileSelect}
-          style={{ display: 'none' }}
+          accept=".csv,.xlsx,.pdf,.txt,.jpg,.png"
         />
 
-        <VoiceButton onTranscript={handleVoiceTranscript} disabled={isLoading} />
+        {/* Mic button */}
+        <button
+          onClick={isRecording ? handleStopRecording : handleStartRecording}
+          disabled={disabled}
+          className={`transition-colors ${
+            isRecording
+              ? 'text-red-500 animate-pulse'
+              : 'text-gray-400 hover:text-[#FF8A4C]'
+          } disabled:opacity-50`}
+        >
+          <Mic size={20} />
+        </button>
 
+        {/* Textarea */}
         <textarea
           ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          placeholder={placeholder}
-          disabled={isLoading}
+          placeholder={isRecording ? 'Recording...' : 'Ask about your workforce...'}
+          disabled={disabled || isRecording}
           rows={1}
-          style={{
-            flex: 1,
-            resize: 'none',
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            color: '#fafafa',
-            fontSize: 13,
-            lineHeight: '20px',
-            height: 40,
-            maxHeight: 120,
-            padding: '10px 4px',
-            fontFamily: 'inherit',
-          }}
+          className="flex-1 bg-[#131318] border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#FF8A4C] focus:ring-1 focus:ring-[#FF8A4C] resize-none disabled:opacity-50"
         />
 
+        {/* Send button */}
         <button
-          type="button"
           onClick={handleSend}
-          disabled={!canSend}
-          title="Send message"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            border: 'none',
-            background: canSend ? '#FF8A4C' : 'rgba(255,255,255,0.04)',
-            color: canSend ? '#09090b' : '#3f3f46',
-            cursor: canSend ? 'pointer' : 'not-allowed',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background 150ms, color 150ms',
-            flexShrink: 0,
-          }}
+          disabled={!message.trim() || isLoading || disabled}
+          className="bg-gradient-to-r from-[#FF8A4C] to-[#e85d04] text-white rounded-lg px-4 py-2 hover:shadow-lg hover:shadow-[#FF8A4C]/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Send size={14} />
+          <Send size={18} />
         </button>
       </div>
+
+      <p className="text-xs text-gray-500 mt-2">
+        Tip: Press Shift+Enter for new line, Enter to send
+      </p>
     </div>
   );
-}
+};
+
+export default ChatInput;

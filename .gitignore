@@ -82,3 +82,7 @@ FINAL-*.md
 # ─── Stray design / prototype files ──────────────────
 Figma*/
 Skills/
+
+# OpenMemory - IDE/Assistant specific rules
+.cursor\rules\openmemory.mdc
+CLAUDE.md

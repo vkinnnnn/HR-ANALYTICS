@@ -1,98 +1,93 @@
 import { create } from 'zustand';
 
 export interface ChatMessage {
+  id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  chart_data?: {
-    chart_type: 'bar' | 'pie' | 'line' | 'area';
-    labels: string[];
-    values: number[];
-    title?: string;
-    highlight?: string;
-  } | null;
-  suggestions?: string[] | null;
-  analysis_type?: string | null;
-  navigation?: { action: string; route: string; scroll_to?: string; highlight?: string } | null;
   timestamp: number;
-  files?: { name: string; type: string }[];
+  loading?: boolean;
 }
 
-interface ChatState {
+export interface ChatState {
   messages: ChatMessage[];
-  conversationId: string;
   isOpen: boolean;
   isStreaming: boolean;
-  suggestions: string[];
-  navigationCommand: { route: string; section?: string } | null;
+  conversationId: string;
   userId: string;
+  currentPage: string;
 
-  addMessage: (msg: ChatMessage) => void;
-  setMessages: (msgs: ChatMessage[]) => void;
-  clearMessages: () => void;
+  // Actions
+  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  updateLastMessage: (content: string) => void;
+  appendToLastMessage: (token: string) => void;
   togglePanel: () => void;
   openPanel: () => void;
   closePanel: () => void;
   setStreaming: (streaming: boolean) => void;
-  setSuggestions: (suggestions: string[]) => void;
-  setNavigation: (nav: { route: string; section?: string } | null) => void;
-  setUserId: (id: string) => void;
-  appendToLastAssistant: (token: string) => void;
-}
-
-function loadMessages(): ChatMessage[] {
-  try {
-    const saved = sessionStorage.getItem('wiq_brain_chat');
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveMessages(messages: ChatMessage[]) {
-  try {
-    sessionStorage.setItem('wiq_brain_chat', JSON.stringify(messages.slice(-50)));
-  } catch { /* ignore quota errors */ }
+  clearConversation: () => void;
+  setCurrentPage: (page: string) => void;
+  setUserId: (userId: string) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  messages: loadMessages(),
-  conversationId: crypto.randomUUID(),
+  messages: [],
   isOpen: false,
   isStreaming: false,
-  suggestions: [],
-  navigationCommand: null,
-  userId: 'anonymous',
+  conversationId: `conv_${Date.now()}`,
+  userId: 'default_user',
+  currentPage: 'dashboard',
 
-  addMessage: (msg) => {
-    const updated = [...get().messages, msg];
-    saveMessages(updated);
-    set({ messages: updated });
-  },
+  addMessage: (message) =>
+    set((state) => ({
+      messages: [
+        ...state.messages,
+        {
+          ...message,
+          id: `msg_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+        },
+      ],
+    })),
 
-  setMessages: (msgs) => {
-    saveMessages(msgs);
-    set({ messages: msgs });
-  },
+  updateLastMessage: (content) =>
+    set((state) => ({
+      messages: state.messages.map((msg, idx) =>
+        idx === state.messages.length - 1 ? { ...msg, content } : msg
+      ),
+    })),
 
-  clearMessages: () => {
-    sessionStorage.removeItem('wiq_brain_chat');
-    set({ messages: [], conversationId: crypto.randomUUID(), suggestions: [] });
-  },
+  appendToLastMessage: (token) =>
+    set((state) => ({
+      messages: state.messages.map((msg, idx) =>
+        idx === state.messages.length - 1
+          ? { ...msg, content: msg.content + token }
+          : msg
+      ),
+    })),
 
-  togglePanel: () => set((s) => ({ isOpen: !s.isOpen })),
-  openPanel: () => set({ isOpen: true }),
-  closePanel: () => set({ isOpen: false }),
-  setStreaming: (streaming) => set({ isStreaming: streaming }),
-  setSuggestions: (suggestions) => set({ suggestions }),
-  setNavigation: (nav) => set({ navigationCommand: nav }),
-  setUserId: (id) => set({ userId: id }),
+  togglePanel: () =>
+    set((state) => ({
+      isOpen: !state.isOpen,
+    })),
 
-  appendToLastAssistant: (token) => {
-    const msgs = get().messages;
-    const last = msgs[msgs.length - 1];
-    if (last && last.role === 'assistant') {
-      const updated = [...msgs.slice(0, -1), { ...last, content: last.content + token }];
-      set({ messages: updated });
-    }
-  },
+  openPanel: () =>
+    set({ isOpen: true }),
+
+  closePanel: () =>
+    set({ isOpen: false }),
+
+  setStreaming: (streaming) =>
+    set({ isStreaming: streaming }),
+
+  clearConversation: () =>
+    set({
+      messages: [],
+      conversationId: `conv_${Date.now()}`,
+    }),
+
+  setCurrentPage: (page) =>
+    set({ currentPage: page }),
+
+  setUserId: (userId) =>
+    set({ userId }),
 }));

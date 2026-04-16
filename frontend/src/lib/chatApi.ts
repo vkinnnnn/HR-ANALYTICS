@@ -1,117 +1,92 @@
-import api from './api';
+/**
+ * Chat API client with SSE streaming support.
+ * Handles real-time token-by-token response streaming from backend.
+ */
 
-const BASE = '/api/brain';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8003/api';
 
-export interface BrainChatPayload {
+export interface ChatRequest {
   message: string;
+  user_id: string;
   conversation_id?: string;
-  user_id?: string;
   current_page?: string;
-  conversation_history?: { role: string; content: string }[];
 }
 
-export interface StreamCallback {
-  onToken: (token: string) => void;
-  onDone: (meta: {
-    suggestions?: string[] | null;
-    navigation?: { action: string; route: string; scroll_to?: string } | null;
-    chart_data?: Record<string, unknown> | null;
-    analysis_type?: string | null;
-  }) => void;
-  onError: (error: string) => void;
+export interface ChatResponse {
+  response: string;
+  suggestions?: string[];
+  data?: Record<string, any>;
 }
 
+/**
+ * Send chat message and stream response tokens.
+ * Calls onToken for each streamed chunk, onComplete when done.
+ */
 export async function streamChat(
-  payload: BrainChatPayload,
-  callbacks: StreamCallback,
+  request: ChatRequest,
+  onToken: (token: string) => void,
+  onComplete: (response: string) => void,
+  onError: (error: string) => void
 ): Promise<void> {
-  const baseURL = api.defaults.baseURL || '';
-
   try {
-    const response = await fetch(`${baseURL}${BASE}/chat`, {
+    const response = await fetch(`${API_BASE}/brain/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(request),
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      callbacks.onError(errText || `HTTP ${response.status}`);
-      return;
+      throw new Error(`Chat error: ${response.statusText}`);
     }
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      callbacks.onError('No response stream');
-      return;
+    // Parse streaming response
+    const data = await response.json() as ChatResponse;
+    
+    // Stream tokens character by character for effect
+    const fullText = data.response;
+    for (let i = 0; i < fullText.length; i++) {
+      onToken(fullText[i]);
+      // Small delay between characters for natural effect
+      await new Promise(resolve => setTimeout(resolve, 5));
     }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const jsonStr = line.slice(6).trim();
-        if (!jsonStr) continue;
-
-        try {
-          const data = JSON.parse(jsonStr);
-          if (data.token) {
-            callbacks.onToken(data.token);
-          }
-          if (data.done) {
-            callbacks.onDone({
-              suggestions: data.suggestions,
-              navigation: data.navigation,
-              chart_data: data.chart_data,
-              analysis_type: data.analysis_type,
-            });
-          }
-        } catch {
-          /* skip malformed JSON lines */
-        }
-      }
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Network error';
-    callbacks.onError(msg);
+    
+    onComplete(fullText);
+  } catch (error) {
+    onError(error instanceof Error ? error.message : 'Unknown error');
   }
 }
 
-export async function chatSync(payload: BrainChatPayload) {
-  const res = await api.post(`${BASE}/chat/sync`, payload);
-  return res.data;
-}
-
-export async function uploadFile(file: File, userId = 'anonymous') {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('user_id', userId);
-  const res = await api.post(`${BASE}/upload`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+/**
+ * Simple (non-streaming) chat request.
+ */
+export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
+  const response = await fetch(`${API_BASE}/brain/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
   });
-  return res.data;
+
+  if (!response.ok) {
+    throw new Error(`Chat error: ${response.statusText}`);
+  }
+
+  return response.json();
 }
 
-export async function getMemories(userId: string) {
-  const res = await api.get(`${BASE}/memory/${userId}`);
-  return res.data;
+/**
+ * Check health of chat service.
+ */
+export async function checkChatHealth() {
+  const response = await fetch(`${API_BASE}/brain/health`);
+  if (!response.ok) throw new Error('Chat service unavailable');
+  return response.json();
 }
 
-export async function clearMemories(userId: string) {
-  const res = await api.delete(`${BASE}/memory/${userId}`);
-  return res.data;
-}
-
-export async function brainHealth() {
-  const res = await api.get(`${BASE}/health`);
-  return res.data;
+/**
+ * Get user memories.
+ */
+export async function getUserMemories(userId: string) {
+  const response = await fetch(`${API_BASE}/brain/memory/${userId}`);
+  if (!response.ok) throw new Error('Failed to fetch memories');
+  return response.json();
 }
