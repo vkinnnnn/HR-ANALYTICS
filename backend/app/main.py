@@ -21,6 +21,7 @@ from .routers import (
     pipeline_router,
     ws,
     brain_router,
+    chat_stream,
 )
 from .routers import dashboard
 
@@ -81,12 +82,19 @@ async def lifespan(app: FastAPI):
 
 
 from .middleware import ProfilingMiddleware, router as profiling_router
+from .error_handlers import configure_error_handlers, setup_logging
+
+# Setup logging
+setup_logging()
 
 app = FastAPI(
     title="HR Workforce Analytics Platform",
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# Configure error handlers
+configure_error_handlers(app)
 
 # Profiling middleware (before CORS so it wraps everything)
 app.add_middleware(ProfilingMiddleware)
@@ -123,6 +131,7 @@ app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxono
 app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard Aggregate"])
 app.include_router(brain_router.router, prefix="/api/brain", tags=["Brain AI"])
+app.include_router(chat_stream.router, prefix="/api/chat", tags=["Chat Streaming"])
 app.include_router(profiling_router, prefix="/api", tags=["Profiling"])
 app.include_router(ws.router, tags=["WebSocket"])
 
