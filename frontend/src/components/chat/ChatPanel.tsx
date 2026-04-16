@@ -3,8 +3,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import ChatMessageComponent from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useChatStore } from '@/stores/chatStore';
-import { streamChat } from '@/lib/chatApi';
-import { useLocation } from 'react-router-dom';
+import { streamChat } from '@/lib/brainApi';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export const ChatPanel: React.FC = () => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -14,7 +14,6 @@ export const ChatPanel: React.FC = () => {
     isOpen,
     isStreaming,
     conversationId,
-    userId,
     currentPage,
     togglePanel,
     setStreaming,
@@ -22,9 +21,11 @@ export const ChatPanel: React.FC = () => {
     appendToLastMessage,
     setCurrentPage,
     markLastMessageLoaded,
+    setLastMessageMetadata,
   } = useChatStore();
 
   const location = useLocation();
+  const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Update current page when route changes
@@ -67,21 +68,28 @@ export const ChatPanel: React.FC = () => {
     });
 
     setStreaming(true);
+    setSuggestions([]); // Clear old suggestions
 
     try {
       await streamChat(
-        {
-          message: messageText,
-          user_id: userId,
-          conversation_id: conversationId,
-          current_page: currentPage,
-        },
+        messageText,
+        conversationId,
+        currentPage,
         (token) => {
           appendToLastMessage(token);
         },
-        (_fullResponse, newSuggestions) => {
+        (response) => {
           markLastMessageLoaded();
-          setSuggestions(newSuggestions || []);
+          // Store metadata on the last message
+          setLastMessageMetadata({
+            routeUsed: response.route_used,
+            hallucinationScore: response.hallucination_score,
+            hallucinationFlag: response.hallucination_flag,
+            wasRefused: response.was_refused,
+            suggestions: response.suggestions,
+            navigation: response.navigation,
+          });
+          setSuggestions(response.suggestions || []);
         },
         (error) => {
           console.error('Chat error:', error);
@@ -143,7 +151,19 @@ export const ChatPanel: React.FC = () => {
             ) : (
               <>
                 {messages.map((msg) => (
-                  <ChatMessageComponent key={msg.id} message={msg} isLoading={msg.loading} />
+                  <div key={msg.id}>
+                    <ChatMessageComponent message={msg} isLoading={msg.loading} />
+                    {msg.role === 'assistant' && msg.navigation && (
+                      <div className="flex gap-2 mb-4 px-6">
+                        <button
+                          onClick={() => navigate(msg.navigation!)}
+                          className="text-xs bg-[#FF8A4C] hover:bg-[#FFB088] text-white px-3 py-1.5 rounded-md transition-colors"
+                        >
+                          View on Dashboard
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
                 <div ref={messagesEndRef} />
               </>

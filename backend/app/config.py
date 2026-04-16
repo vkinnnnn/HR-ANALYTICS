@@ -44,7 +44,24 @@ class Settings(BaseSettings):
     # Mem0 (per-user memory)
     MEM0_ENABLED: bool = True
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    # Agent (LangGraph)
+    agent_router_model: str = "gpt-4o-mini"
+    agent_synthesis_model: str = "gpt-4o"
+    agent_hallucination_model: str = "gpt-4o-mini"
+    crag_threshold: float = 0.25
+
+    # ChromaDB path
+    chroma_path: str = "./chroma_db"
+
+    # Neo4j AuraDB
+    neo4j_uri: str = ""
+    neo4j_username: str = ""
+    neo4j_password: str = ""
+
+    # Profile cache
+    profile_cache_path: str = "./data/profile_cache.json"
+
+    model_config = {"env_file": ".env", "extra": "ignore", "case_sensitive": False}
 
 
 settings = Settings()

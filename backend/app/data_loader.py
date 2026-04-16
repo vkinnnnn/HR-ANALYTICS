@@ -188,3 +188,56 @@ def get_stats() -> dict:
         "loaded_at": str(_data_cache.get("_loaded_at", "")),
     }
     return stats
+
+
+# ── Recognition Data Loader (for LangGraph agent) ──────────────────────────
+
+_recognition_cache: pd.DataFrame | None = None
+
+
+def get_recognition_data() -> pd.DataFrame:
+    """Load and return enriched recognition DataFrame (cached)."""
+    global _recognition_cache
+
+    if _recognition_cache is not None:
+        return _recognition_cache
+
+    # Load from CSV
+    recognition_path = os.path.join(DATA_DIR, "..", "data", "annotated_results.csv")
+    if not os.path.exists(recognition_path):
+        # Try alternate path
+        recognition_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "annotated_results.csv")
+
+    if not os.path.exists(recognition_path):
+        print(f"Warning: Recognition CSV not found at {recognition_path}. Returning empty DataFrame.")
+        _recognition_cache = pd.DataFrame()
+        return _recognition_cache
+
+    df = pd.read_csv(recognition_path)
+    df.columns = df.columns.str.strip()
+
+    # Enrich with derived fields
+    try:
+        from .services.derived_fields import enrich_dataframe
+        df = enrich_dataframe(df)
+    except Exception as e:
+        print(f"Warning: Could not enrich recognition DataFrame: {e}. Using raw data.")
+
+    _recognition_cache = df
+
+    # Rebuild knowledge base after enrichment
+    try:
+        from .services.knowledge_base import rebuild as rebuild_knowledge_base
+        from .config import settings
+        rebuild_knowledge_base(df, chroma_path=settings.chroma_path)
+    except Exception as e:
+        print(f"Warning: Could not rebuild knowledge base: {e}")
+
+    return _recognition_cache
+
+
+def reload_recognition_data() -> pd.DataFrame:
+    """Force reload recognition data from CSV and re-enrich."""
+    global _recognition_cache
+    _recognition_cache = None
+    return get_recognition_data()

@@ -32,6 +32,7 @@ langchain-community>=0.3.0
 langchain-text-splitters>=0.3.0
 # Agent Orchestration
 langgraph>=0.2.0
+networkx>=3.3
 # Memory
 mem0ai>=0.1.0
 # File Processing

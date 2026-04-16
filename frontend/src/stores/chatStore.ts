@@ -6,6 +6,13 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   loading?: boolean;
+  routeUsed?: string;
+  hallucinationScore?: number;
+  hallucinationFlag?: boolean;
+  wasRefused?: boolean;
+  suggestions?: string[];
+  navigation?: string;
+  chartData?: Record<string, unknown>;
 }
 
 export interface ChatState {
@@ -21,6 +28,7 @@ export interface ChatState {
   updateLastMessage: (content: string) => void;
   appendToLastMessage: (token: string) => void;
   markLastMessageLoaded: () => void;
+  setLastMessageMetadata: (metadata: Partial<ChatMessage>) => void;
   togglePanel: () => void;
   openPanel: () => void;
   closePanel: () => void;
@@ -71,6 +79,15 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: state.messages.map((msg, idx) =>
         idx === state.messages.length - 1
           ? { ...msg, loading: false }
+          : msg
+      ),
+    })),
+
+  setLastMessageMetadata: (metadata: Partial<ChatMessage>) =>
+    set((state) => ({
+      messages: state.messages.map((msg, idx) =>
+        idx === state.messages.length - 1
+          ? { ...msg, ...metadata }
           : msg
       ),
     })),

@@ -42,6 +42,21 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({
     );
   }
 
+  // Route badge emoji mapping
+  const routeBadges: Record<string, string> = {
+    pandas_query: '📊 Analytical',
+    semantic_search: '🔍 Search',
+    profile_and_replace: '👤 Profile',
+    llm_synthesis: '💡 Insight',
+    chart_generator: '📈 Chart',
+    graph_query: '🕸️ Graph',
+    dashboard_navigate: '🗺️ Navigate',
+    run_pipeline: '⚙️ Pipeline',
+    process_file: '📄 File',
+  };
+
+  const routeLabel = message.routeUsed ? (routeBadges[message.routeUsed] || message.routeUsed) : null;
+
   return (
     <div className="flex gap-3 mb-4">
       {/* Fire orb avatar */}
@@ -58,6 +73,22 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({
           </div>
         ) : (
           <>
+            {/* Route badge */}
+            {routeLabel && (
+              <div className="mb-2">
+                <span className="inline-block text-xs bg-[#FF8A4C]/10 border border-[#FF8A4C]/25 text-[#FFB088] px-2 py-1 rounded-full">
+                  {routeLabel}
+                </span>
+              </div>
+            )}
+
+            {/* Hallucination warning */}
+            {message.hallucinationFlag && message.hallucinationScore && message.hallucinationScore >= 0.4 && message.hallucinationScore < 0.6 && (
+              <div className="mb-2 p-2 bg-[#fbbf24]/10 border border-[#fbbf24]/25 rounded-md text-xs text-[#fbbf24]">
+                ⚠️ This response has low confidence. Verify the facts before acting on them.
+              </div>
+            )}
+
             <div className="bg-[#131318] border border-gray-600 rounded-lg px-4 py-3 mb-2">
               <div className="prose prose-invert prose-sm max-w-none">
                 <ReactMarkdown>{message.content}</ReactMarkdown>
