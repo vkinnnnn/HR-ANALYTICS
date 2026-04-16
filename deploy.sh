@@ -109,9 +109,7 @@ gcloud run deploy $BACKEND_SERVICE \
     --min-instances 0 \
     --max-instances 3 \
     --timeout 300 \
-    --set-env-vars "$ENV_VARS" \
-    --build-timeout 1200 \
-    --machine-type=e2-highcpu-8
+    --set-env-vars "$ENV_VARS"
 
 BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE --region $REGION --project $PROJECT_ID --format='value(status.url)' 2>/dev/null)
 ok "Backend deployed: $BACKEND_URL"
