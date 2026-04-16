@@ -19,8 +19,8 @@ export interface ChatResponse {
 }
 
 /**
- * Send chat message and stream response tokens via Server-Sent Events.
- * Calls onToken for each streamed chunk, onComplete when done.
+ * Send chat message and stream response tokens.
+ * Uses the non-streaming endpoint and simulates streaming by character.
  */
 export async function streamChat(
   request: ChatRequest,
@@ -29,7 +29,7 @@ export async function streamChat(
   onError: (error: string) => void
 ): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE}/chat/stream`, {
+    const response = await fetch(`${API_BASE}/brain/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
@@ -39,44 +39,21 @@ export async function streamChat(
       throw new Error(`Chat error: ${response.statusText}`);
     }
 
-    let fullText = '';
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('No response body');
+    const data = await response.json();
 
-    const decoder = new TextDecoder();
-    let buffer = '';
+    if (data.error) {
+      throw new Error(data.error);
+    }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // Simulate streaming by breaking response into chunks
+    const fullText = data.response || '';
 
-      buffer += decoder.decode(value, { stream: true });
-
-      // Parse SSE format: "data: {...}\n\n"
-      const lines = buffer.split('\n');
-      buffer = lines[lines.length - 1]; // Keep incomplete line
-
-      for (let i = 0; i < lines.length - 1; i++) {
-        const line = lines[i];
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.token) {
-              onToken(data.token);
-              fullText += data.token;
-            }
-            if (data.done) {
-              onComplete(fullText);
-              return;
-            }
-            if (data.error) {
-              throw new Error(data.error);
-            }
-          } catch (parseError) {
-            console.error('SSE parse error:', parseError);
-          }
-        }
-      }
+    // Stream by words (faster, more readable)
+    const words = fullText.split(' ');
+    for (const word of words) {
+      onToken(word + ' ');
+      // Small delay between words for visual effect
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
 
     onComplete(fullText);
