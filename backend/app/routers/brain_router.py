@@ -8,7 +8,7 @@ from ..services.brain import get_brain_agent
 from ..services.knowledge_base import rebuild_knowledge_base, search
 from ..services.memory_manager import memory_manager
 from ..services.report_generator import get_report_generator
-from ..data_loader import get_employees, get_recognition, _data_cache, is_loaded, is_recognition_loaded
+from ..data_loader import get_employees, _data_cache, is_loaded
 
 router = APIRouter()
 
@@ -35,10 +35,8 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     
     brain = get_brain_agent({
         "employees": get_employees(),
-        "recognition": get_recognition(),
         "history": _data_cache.get("history"),
         "manager_span": _data_cache.get("manager_span"),
-        "recognition_kpis": _data_cache.get("recognition_kpis", {})
     })
     
     try:
@@ -60,7 +58,6 @@ async def health() -> Dict[str, Any]:
     return {
         "status": "ok",
         "workforce_loaded": is_loaded(),
-        "recognition_loaded": is_recognition_loaded(),
         "employees_count": len(get_employees()) if is_loaded() else 0,
     }
 

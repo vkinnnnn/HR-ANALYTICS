@@ -20,6 +20,7 @@ export interface ChatState {
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
   updateLastMessage: (content: string) => void;
   appendToLastMessage: (token: string) => void;
+  markLastMessageLoaded: () => void;
   togglePanel: () => void;
   openPanel: () => void;
   closePanel: () => void;
@@ -29,7 +30,7 @@ export interface ChatState {
   setUserId: (userId: string) => void;
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
+export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isOpen: false,
   isStreaming: false,
@@ -61,6 +62,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: state.messages.map((msg, idx) =>
         idx === state.messages.length - 1
           ? { ...msg, content: msg.content + token }
+          : msg
+      ),
+    })),
+
+  markLastMessageLoaded: () =>
+    set((state) => ({
+      messages: state.messages.map((msg, idx) =>
+        idx === state.messages.length - 1
+          ? { ...msg, loading: false }
           : msg
       ),
     })),

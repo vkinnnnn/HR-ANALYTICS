@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Send, Paperclip, Mic, X } from 'lucide-react';
+import { Send, Paperclip, X } from 'lucide-react';
+import { VoiceButton } from './VoiceButton';
 
 interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void;
@@ -14,11 +15,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState<File[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
 
   // Auto-expand textarea
   useEffect(() => {
@@ -41,36 +39,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleStartRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([blob], 'voice.webm', { type: 'audio/webm' });
-        setFiles([audioFile]);
-        stream.getTracks().forEach((track) => track.stop());
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Microphone access denied:', error);
-    }
-  };
-
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
+  const handleTranscript = (text: string) => {
+    setMessage((prev) => (prev ? `${prev} ${text}` : text));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -122,18 +92,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           accept=".csv,.xlsx,.pdf,.txt,.jpg,.png"
         />
 
-        {/* Mic button */}
-        <button
-          onClick={isRecording ? handleStopRecording : handleStartRecording}
-          disabled={disabled}
-          className={`transition-colors ${
-            isRecording
-              ? 'text-red-500 animate-pulse'
-              : 'text-gray-400 hover:text-[#FF8A4C]'
-          } disabled:opacity-50`}
-        >
-          <Mic size={20} />
-        </button>
+        {/* Voice input */}
+        <VoiceButton onTranscript={handleTranscript} disabled={disabled || isLoading} />
 
         {/* Textarea */}
         <textarea
@@ -141,8 +101,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isRecording ? 'Recording...' : 'Ask about your workforce...'}
-          disabled={disabled || isRecording}
+          placeholder="Ask about your workforce..."
+          disabled={disabled}
           rows={1}
           className="flex-1 bg-[#131318] border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#FF8A4C] focus:ring-1 focus:ring-[#FF8A4C] resize-none disabled:opacity-50"
         />

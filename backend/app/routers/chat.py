@@ -271,35 +271,6 @@ Departments: {df['department_name'].nunique()} | Countries: {df['country'].nuniq
     if anomalies:
         sections.append("ANOMALIES DETECTED:\n" + "\n".join(f"  ⚠ {a}" for a in anomalies))
 
-    # ── Recognition data context ──
-    try:
-        from ..recognition_loader import get_recognition, is_recognition_loaded, compute_gini
-        if is_recognition_loaded():
-            rdf = get_recognition()
-            if len(rdf) > 0:
-                rcounts = rdf['recipient_title'].value_counts()
-                gini = compute_gini(rcounts.values.tolist())
-                cats = rdf['category_name'].value_counts()
-                cat_lines = [f"  {name}: {count} ({round(count/len(rdf)*100,1)}%)" for name, count in cats.items()]
-                direction = rdf['direction'].value_counts()
-                cross_func = round(float((~rdf['same_function']).mean() * 100), 1)
-                sections.append(f"""RECOGNITION INTELLIGENCE (1,000 peer-to-peer awards):
-Total awards: {len(rdf)} | Unique recipients: {rdf['recipient_title'].nunique()} | Unique nominators: {rdf['nominator_title'].nunique()}
-Gini coefficient: {round(gini,3)} (recognition inequality — 0=equal, 1=concentrated)
-Avg message specificity: {round(float(rdf['specificity'].mean()),3)}/1.0 (low = vague praise, high = specific impact)
-Cross-function rate: {cross_func}%
-Direction: Downward {direction.get('Downward',0)} | Upward {direction.get('Upward',0)} | Lateral {direction.get('Lateral',0)}
-
-CATEGORY DISTRIBUTION:
-{chr(10).join(cat_lines)}
-
-KEY INSIGHTS:
-- {cats.index[0]} dominates at {round(cats.iloc[0]/len(rdf)*100,1)}% — potential cultural bias
-- {cats.index[-1]} is smallest at {round(cats.iloc[-1]/len(rdf)*100,1)}% — possible blind spot
-- Low avg specificity (0.244) means most messages are vague praise without measurable outcomes
-- Gini of {round(gini,3)} indicates moderate inequality in who gets recognized""")
-    except Exception:
-        pass
 
     # ── Page-specific deep context ──
     if current_page:
@@ -344,9 +315,9 @@ def _get_page_specific_context(page: str, df, active, departed, hist, filters) -
 
 # ─── System Prompt ──────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are Workforce AI — a senior People Analytics and Recognition Intelligence consultant embedded in Workforce IQ, a platform by Workhuman.
+SYSTEM_PROMPT = """You are Workforce AI — a senior People Analytics consultant embedded in Workforce IQ.
 
-You have comprehensive workforce AND recognition data. Provide deep, actionable analysis — identify patterns, root causes, and recommend actions. For recognition questions, analyze taxonomy distribution, message quality, inequality, cross-function flows, and nominator effectiveness.
+Provide deep, actionable analysis of workforce data — identify patterns, root causes, and recommend actions for retention, progression, and organizational health.
 
 ANALYSIS PRINCIPLES:
 1. Lead with the specific number, then explain what it means

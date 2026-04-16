@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 
-from ..data_loader import get_employees, get_history, is_loaded, load_and_process, load_recognition, is_recognition_loaded, get_recognition, _data_cache
+from ..data_loader import get_employees, get_history, is_loaded, load_and_process, _data_cache
 from ..services.knowledge_base import rebuild_knowledge_base
 from ..services.pipeline_orchestrator import pipeline_orchestrator
 from ..services.file_processor import process_file
@@ -68,7 +68,6 @@ async def upload_csv(file: UploadFile = File(...)):
     reload_error = None
     try:
         load_and_process(UPLOAD_DIR)
-        load_recognition(UPLOAD_DIR)
         _invalidate_cache()
         reload_status = "success"
     except Exception as e:
@@ -118,18 +117,6 @@ async def get_status():
         if loaded_at is not None:
             result["loaded_at"] = str(loaded_at)
 
-    # Recognition data status
-    if is_recognition_loaded():
-        try:
-            rdf = get_recognition()
-            result["recognition_count"] = len(rdf)
-            result["recognition_categories"] = int(rdf["category_id"].nunique()) if len(rdf) > 0 else 0
-            result["recognition_subcategories"] = int(rdf["subcategory_id"].nunique()) if len(rdf) > 0 else 0
-            result["unique_recipients"] = int(rdf["recipient_title"].nunique()) if len(rdf) > 0 else 0
-            result["unique_nominators"] = int(rdf["nominator_title"].nunique()) if len(rdf) > 0 else 0
-        except Exception:
-            pass
-
     return result
 
 
@@ -138,7 +125,6 @@ async def reload_data():
     """Re-trigger load_and_process() to refresh all cached data."""
     try:
         load_and_process(UPLOAD_DIR)
-        load_recognition(UPLOAD_DIR)
         _invalidate_cache()
     except FileNotFoundError as e:
         raise HTTPException(
@@ -202,14 +188,10 @@ async def run_pipeline(file: Optional[UploadFile] = File(None)):
         load_and_process(UPLOAD_DIR)
         progress_callback("taxonomy", 50)
 
-        # ── Stage 3: Load recognition data ──
-        load_recognition(UPLOAD_DIR)
-        progress_callback("enrichment", 75)
-
-        # ── Stage 4: Rebuild knowledge base ──
+        # ── Stage 2: Rebuild knowledge base ──
         _invalidate_cache()
         doc_count = rebuild_knowledge_base(_data_cache)
-        progress_callback("knowledge_base", 95)
+        progress_callback("knowledge_base", 90)
 
         _pipeline_state = {
             "status": "completed",

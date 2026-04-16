@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
 from .database import init_db
-from .data_loader import load_and_process, is_loaded, load_recognition
+from .data_loader import load_and_process, is_loaded
 from .routers import (
     workforce,
     turnover,
@@ -24,7 +24,6 @@ from .routers import (
     chat_stream,
     simple_chat,
 )
-from .routers import dashboard
 
 
 @asynccontextmanager
@@ -60,11 +59,6 @@ async def lifespan(app: FastAPI):
             print(f"Workforce data loaded from {data_dir}")
         except Exception as e:
             print(f"Warning: Could not auto-load workforce data: {e}")
-        try:
-            load_recognition(data_dir)
-            print(f"Recognition data loaded from {data_dir}")
-        except Exception as e:
-            print(f"Warning: Could not auto-load recognition data: {e}")
 
     # Build ChromaDB knowledge base from loaded data
     try:
@@ -130,7 +124,6 @@ app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(taxonomy_router.router, prefix="/api/taxonomy", tags=["Taxonomy"])
 app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeline"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard Aggregate"])
 app.include_router(brain_router.router, prefix="/api/brain", tags=["Brain AI"])
 app.include_router(chat_stream.router, prefix="/api/chat", tags=["Chat Streaming"])
 app.include_router(simple_chat.router, prefix="/api", tags=["Chat"])

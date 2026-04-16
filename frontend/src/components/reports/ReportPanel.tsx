@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { axiosInstance } from '@/lib/api';
+import api from '@/lib/api';
 import { Download, Copy, Loader2 } from 'lucide-react';
 
 interface ReportPanelProps {
@@ -26,10 +26,10 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({ isOpen, onClose, repor
     try {
       let response;
       if (reportType === 'summary') {
-        response = await axiosInstance.get('/brain/report/summary');
+        response = await api.get('/brain/report/summary');
         setContent(response.data.summary);
       } else if (reportType === 'kpis') {
-        response = await axiosInstance.get('/brain/report/kpis');
+        response = await api.get('/brain/report/kpis');
         setContent(JSON.stringify(response.data, null, 2));
       }
     } catch (err) {

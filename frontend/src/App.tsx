@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ToastProvider } from './components/ui/Toast';
 import { Sidebar } from './components/layout/Sidebar';
 import { AmbientBackground } from './components/layout/AmbientBackground';
@@ -7,14 +7,6 @@ import { ChatTrigger } from './components/chat/ChatTrigger';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { useChatStore } from './stores/chatStore';
 import { Dashboard } from './pages/Dashboard';
-import { RecognitionExplorer } from './pages/RecognitionExplorer';
-import { Categories } from './pages/Categories';
-import { Inequality } from './pages/Inequality';
-import { Quality } from './pages/Quality';
-import { Flow } from './pages/Flow';
-import { Nominators } from './pages/Nominators';
-import { Fairness } from './pages/Fairness';
-import { DataHub } from './pages/DataHub';
 import { Workforce } from './pages/Workforce';
 import { Turnover } from './pages/Turnover';
 import { Tenure } from './pages/Tenure';
@@ -22,17 +14,16 @@ import { FlightRisk } from './pages/FlightRisk';
 import { Careers } from './pages/Careers';
 import { Managers } from './pages/Managers';
 import { Org } from './pages/Org';
+import { Chat } from './pages/Chat';
 import { Insights } from './pages/Insights';
+import { Upload } from './pages/Upload';
+import { Reports } from './pages/Reports';
 import { SettingsPage } from './pages/SettingsPage';
 import LandingPage from './pages/LandingPage';
 import api from './lib/api';
-import type { ChatMessage } from './stores/chatStore';
 
 function AppContent() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { isOpen, openPanel, closePanel, togglePanel, addMessage, messages } = useChatStore();
-  const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
+  const { isOpen, openPanel, closePanel, togglePanel, addMessage } = useChatStore();
   const [hasNotification, setHasNotification] = useState(false);
 
   // First-time onboarding
@@ -42,14 +33,12 @@ function AppContent() {
       setTimeout(() => {
         openPanel();
         setHasNotification(false);
-        const welcomeMsg: ChatMessage = {
-          role: 'system',
-          content: '**Welcome to Workforce IQ!** I\'m your AI workforce analyst powered by **The Brain**. I can analyze your data, answer questions, generate reports, and guide you around the platform.\n\nTry clicking a prompt below, or ask me anything.',
-          timestamp: Date.now(),
-        };
         const currentMessages = useChatStore.getState().messages;
         if (!currentMessages.some(m => m.content.includes('Welcome to Workforce IQ'))) {
-          addMessage(welcomeMsg);
+          addMessage({
+            role: 'system',
+            content: '**Welcome to Workforce IQ!** I\'m your AI workforce analyst powered by **The Brain**. I can analyze your data, answer questions, generate reports, and guide you around the platform.\n\nTry clicking a prompt below, or ask me anything.',
+          });
         }
         localStorage.setItem('workforceiq_onboarded', 'true');
       }, 2000);
@@ -100,7 +89,6 @@ function AppContent() {
             addMessage({
               role: 'system',
               content: parts.join('\n'),
-              timestamp: Date.now(),
             });
           }
         }
@@ -133,14 +121,6 @@ function AppContent() {
       >
         <Routes>
           <Route path="" element={<Dashboard />} />
-          <Route path="explorer" element={<RecognitionExplorer />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="inequality" element={<Inequality />} />
-          <Route path="quality" element={<Quality />} />
-          <Route path="flow" element={<Flow />} />
-          <Route path="network" element={<Flow />} />
-          <Route path="nominators" element={<Nominators />} />
-          <Route path="fairness" element={<Fairness />} />
           <Route path="workforce" element={<Workforce />} />
           <Route path="turnover" element={<Turnover />} />
           <Route path="tenure" element={<Tenure />} />
@@ -148,11 +128,10 @@ function AppContent() {
           <Route path="careers" element={<Careers />} />
           <Route path="managers" element={<Managers />} />
           <Route path="org" element={<Org />} />
+          <Route path="chat" element={<Chat />} />
           <Route path="insights" element={<Insights />} />
-          <Route path="data-hub" element={<DataHub />} />
-          <Route path="pipeline" element={<DataHub />} />
-          <Route path="upload" element={<DataHub />} />
-          <Route path="reports" element={<DataHub />} />
+          <Route path="upload" element={<Upload />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<SettingsPage />} />
         </Routes>
       </main>
@@ -162,14 +141,7 @@ function AppContent() {
         isOpen={isOpen}
         hasNotification={hasNotification}
       />
-      <ChatPanel
-        isOpen={isOpen}
-        onClose={closePanel}
-        currentPage={location.pathname.startsWith('/app') ? location.pathname : `/app${location.pathname}`}
-        prefillMessage={prefillMessage}
-        onPrefillConsumed={() => setPrefillMessage(null)}
-        onNavigate={navigate}
-      />
+      <ChatPanel />
     </>
   );
 }

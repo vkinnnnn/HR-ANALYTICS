@@ -7,7 +7,7 @@ import json
 import logging
 
 from ..services.analytics_engine import get_analytics_engine
-from ..data_loader import is_loaded, get_employees, get_recognition, _data_cache
+from ..data_loader import is_loaded, get_employees, _data_cache
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,10 +42,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # Initialize analytics engine
         analytics = get_analytics_engine({
             "employees": get_employees(),
-            "recognition": get_recognition(),
             "history": _data_cache.get("history"),
             "manager_span": _data_cache.get("manager_span"),
-            "recognition_kpis": _data_cache.get("recognition_kpis", {})
         })
 
         msg = request.message.lower()

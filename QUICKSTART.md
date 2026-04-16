@@ -1,21 +1,21 @@
-# Workforce IQ Brain — Quick Start Guide
+# Workforce IQ — Quick Start Guide
 
 ## TL;DR (30 seconds)
 
 ```bash
-# Terminal 1: Backend
+# Terminal 1: Backend (port 8119)
 cd backend
 pip install -r requirements.txt
 export OPENAI_API_KEY="sk-..."
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --port 8119
 
-# Terminal 2: Frontend
+# Terminal 2: Frontend (port 3000)
 cd frontend
 npm install
 npm run dev
 ```
 
-Then open http://localhost:3000 and click the fire orb 🔥 in the bottom-right corner.
+Then open http://localhost:3000 and click the fire orb 🔥 in the bottom-right corner to chat with your workforce data.
 
 ---
 
@@ -44,19 +44,20 @@ export OPENROUTER_API_KEY="sk-or-..."   # OpenRouter (free)
 export LLM_PROVIDER="openrouter"        # If using OpenRouter
 ```
 
-### Step 3: Start Backend
+### Step 3: Start Backend (Port 8119)
 
 ```bash
 cd backend
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --port 8119
 ```
 
 **Expected output:**
 ```
-Workforce data loaded from wh_Dataset
-Recognition data loaded from wh_Dataset
-[OK] Knowledge base built: 25 documents
-Uvicorn running on http://127.0.0.1:8000
+Workforce data loaded: 2,466 employees
+Career moves classified: 3,297 moves
+[OK] Knowledge base built: 25+ documents
+Application startup complete
+Uvicorn running on http://127.0.0.1:8119
 ```
 
 ### Step 4: Start Frontend (New terminal)
@@ -85,22 +86,22 @@ VITE v6.0.0  ready in 234 ms
 ## What's Included
 
 ### Backend (Python/FastAPI)
-- **Brain Agent**: LangGraph state machine with intent routing
-- **Knowledge Base**: ChromaDB with 25+ embedded documents
-- **Analytics**: 15+ KPI query types
-- **Reports**: Executive summaries & PDF export
-- **Memory**: Per-user conversation context
+- **Analytics Engine**: 50+ endpoints across 8 categories (workforce, turnover, tenure, careers, managers, org, predictions, reports)
+- **Brain Agent**: LangGraph state machine with intent routing (analytics vs. knowledge base)
+- **Knowledge Base**: ChromaDB with 25+ embedded documents about workforce metrics
+- **ML Predictions**: Flight risk scoring (LogisticRegression on tenure, role changes, manager churn)
+- **Memory Manager**: SQLite persistence for per-user conversation context
 
 ### Frontend (React/TypeScript)
-- **Chat Panel**: Fire orb FAB with message history
-- **Input**: File upload, voice recording, markdown rendering
-- **Reports**: Display & export as PDF
-- **State**: Zustand store for chat history
+- **14 Analytics Pages**: Dashboard, Workforce Composition, Turnover, Tenure, Flight Risk, Careers, Managers, Org Structure, Chat, Insights, Upload, Reports, Settings
+- **Chat Panel**: Fire orb FAB with natural language queries ("What's our attrition?")
+- **Design System**: Premium dark theme with glass panels, orange accent, Recharts visualization
+- **State Management**: Zustand store for chat history, user preferences, analytics state
 
 ### Data
-- 2,466 employees across 20+ departments
-- 11,803 job history records (career progression)
-- 1,000+ recognition awards (engagement data)
+- **2,466 employees** across 20+ departments, 13 job levels, 30+ locations
+- **11,803 job history records** (average 4.8 moves per person for career progression analysis)
+- **Key metrics**: turnover, tenure, promotion velocity, span of control, manager retention
 
 ---
 
@@ -145,18 +146,27 @@ curl http://localhost:8000/api/brain/health
 - Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` before starting backend
 - Restart backend after setting key
 
+### Backend not responding
+- Verify backend running on http://localhost:8119 (not 8000)
+- Check backend logs for startup errors
+- Ensure data files in `wh_Dataset/` folder exist
+
 ### Chat responses are slow
-- First query embeds knowledge base (takes ~5s)
-- Subsequent queries are faster (~1s)
+- First chat request processes analytics (5–10ms) and LLM formatting (300–500ms)
+- Subsequent requests cached (much faster)
 
 ---
 
 ## Next Steps
 
 1. **Try Sample Queries**
+   - "How many employees do we have?"
    - "What's our turnover rate?"
    - "Show me headcount by department"
-   - "Who's been here the longest?"
+   - "Who's at flight risk?"
+   - "Which managers have the best team retention?"
+   - "How many people have been in the same role for 3+ years?"
+   - "What's the average tenure by grade?"
    - "Create an executive summary"
 
 2. **Upload New Data**
@@ -176,19 +186,22 @@ curl http://localhost:8000/api/brain/health
 ## Architecture at a Glance
 
 ```
-Browser (React 19)
+Browser (React 18)
     ↓
-Chat Panel (fire orb FAB)
+Dashboard + Chat (fire orb FAB)
     ↓
-POST /api/brain/chat
+/api/chat (natural language)
+/api/workforce/* (analytics)
+/api/turnover/* (attrition)
     ↓
-BrainAgent (LangGraph)
-    ├─ Intent routing
-    ├─ ChromaDB search
-    ├─ Analytics engine
-    └─ LLM generation
+FastAPI Backend (Port 8119)
+    ├─ Analytics Engine (cached DataFrames)
+    ├─ BrainAgent (LangGraph)
+    ├─ Knowledge Base (ChromaDB)
+    ├─ ML Flight Risk (scikit-learn)
+    └─ Memory Manager (SQLite)
     ↓
-Response + suggestions
+Response + charts + suggestions
 ```
 
 ---
@@ -196,9 +209,9 @@ Response + suggestions
 ## Support
 
 - **Logs**: `uvicorn` console output (backend) / Browser DevTools (frontend)
-- **Health**: `GET /api/brain/health`
-- **Data Status**: `GET /api/upload/status`
-- **API Docs**: http://localhost:8000/docs (Swagger UI)
+- **Health**: `GET /api/` (root endpoint)
+- **API Docs**: http://localhost:8119/docs (Swagger/OpenAPI)
+- **More Info**: See README.md, ARCHITECTURE.md, FEATURES.md
 
 ---
 

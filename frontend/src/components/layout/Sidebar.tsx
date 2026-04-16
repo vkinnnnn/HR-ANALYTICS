@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Search, TreePine, Scale, MessageSquareText,
-  ArrowRightLeft, Network, Trophy, ShieldCheck,
-  Users, TrendingDown, Briefcase, UserCog,
-  Sparkles, Upload, Settings,
+  LayoutDashboard, Users, TrendingDown, Clock, ShieldAlert,
+  Briefcase, UserCog, Building2, MessageSquare, Sparkles, Upload, FileText, Settings,
   ChevronLeft, ChevronRight, User, LogOut, HelpCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -15,50 +13,41 @@ const NAV_GROUPS = [
     color: '#FF8A4C',
     items: [
       { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/app/explorer', icon: Search, label: 'Recognition Explorer' },
+      { to: '/app/workforce', icon: Users, label: 'Workforce Composition' },
     ],
   },
   {
-    label: 'Analytics',
-    color: '#a78bfa',
+    label: 'Retention',
+    color: '#fb7185',
     items: [
-      { to: '/app/categories', icon: TreePine, label: 'Categories' },
-      { to: '/app/inequality', icon: Scale, label: 'Inequality' },
-      { to: '/app/quality', icon: MessageSquareText, label: 'Message Quality' },
-    ],
-  },
-  {
-    label: 'Network',
-    color: '#60a5fa',
-    items: [
-      { to: '/app/flow', icon: ArrowRightLeft, label: 'Recognition Flow' },
-      { to: '/app/network', icon: Network, label: 'Social Graph' },
+      { to: '/app/turnover', icon: TrendingDown, label: 'Turnover & Attrition' },
+      { to: '/app/tenure', icon: Clock, label: 'Tenure Analysis' },
+      { to: '/app/flight-risk', icon: ShieldAlert, label: 'Flight Risk' },
     ],
   },
   {
     label: 'People',
     color: '#34d399',
     items: [
-      { to: '/app/nominators', icon: Trophy, label: 'Nominators' },
-      { to: '/app/fairness', icon: ShieldCheck, label: 'Fairness Audit' },
-    ],
-  },
-  {
-    label: 'Workforce',
-    color: '#fbbf24',
-    items: [
-      { to: '/app/workforce', icon: Users, label: 'Workforce' },
-      { to: '/app/turnover', icon: TrendingDown, label: 'Turnover' },
-      { to: '/app/careers', icon: Briefcase, label: 'Careers' },
-      { to: '/app/managers', icon: UserCog, label: 'Managers' },
+      { to: '/app/careers', icon: Briefcase, label: 'Career Progression' },
+      { to: '/app/managers', icon: UserCog, label: 'Manager Analytics' },
+      { to: '/app/org', icon: Building2, label: 'Org Structure' },
     ],
   },
   {
     label: 'Intelligence',
-    color: '#fb7185',
+    color: '#a78bfa',
     items: [
+      { to: '/app/chat', icon: MessageSquare, label: 'AI Chatbot' },
       { to: '/app/insights', icon: Sparkles, label: 'AI Insights' },
-      { to: '/app/data-hub', icon: Upload, label: 'Data Hub' },
+    ],
+  },
+  {
+    label: 'Operations',
+    color: '#fbbf24',
+    items: [
+      { to: '/app/upload', icon: Upload, label: 'Data Upload' },
+      { to: '/app/reports', icon: FileText, label: 'Reports & Export' },
       { to: '/app/settings', icon: Settings, label: 'Settings' },
     ],
   },

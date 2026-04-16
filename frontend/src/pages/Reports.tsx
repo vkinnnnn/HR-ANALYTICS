@@ -12,8 +12,7 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { Badge } from '../components/ui/Badge';
 import { ChartTooltip } from '../components/charts/ChartTooltip';
 import api from '../lib/api';
-
-const CHART_COLORS = ['#FF8A4C', '#34d399', '#a78bfa', '#60a5fa', '#fbbf24', '#fb7185', '#22d3ee', '#f472b6'];
+import { CHART_COLORS } from '../lib/utils';
 
 interface ReportSection {
   title: string;
@@ -62,7 +61,7 @@ export function Reports() {
 
   const handleExport = () => {
     setExporting(true);
-    window.open(`${api.defaults.baseURL}/api/reports/export`, '_blank');
+    window.open(`${api.defaults.baseURL}/api/reports/download`, '_blank');
     setTimeout(() => setExporting(false), 1500);
   };
 

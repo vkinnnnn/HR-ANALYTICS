@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, AsyncGenerator
 
 from ..services.brain import get_brain_agent
-from ..data_loader import _data_cache, is_loaded, get_employees, get_recognition
+from ..data_loader import _data_cache, is_loaded, get_employees
 
 router = APIRouter()
 
@@ -28,10 +28,8 @@ async def stream_response(user_id: str, message: str, current_page: Optional[str
         # Initialize brain agent
         brain = get_brain_agent({
             "employees": get_employees(),
-            "recognition": get_recognition(),
             "history": _data_cache.get("history"),
             "manager_span": _data_cache.get("manager_span"),
-            "recognition_kpis": _data_cache.get("recognition_kpis", {})
         })
         
         # Process message

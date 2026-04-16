@@ -1,14 +1,23 @@
 import { useState, useRef, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 interface VoiceButtonProps {
   onTranscript: (text: string) => void;
   disabled?: boolean;
 }
 
+type SpeechRecognitionType = typeof window.SpeechRecognition;
+
 export function VoiceButton({ onTranscript, disabled }: VoiceButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<InstanceType<SpeechRecognitionType> | null>(null);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
@@ -25,7 +34,7 @@ export function VoiceButton({ onTranscript, disabled }: VoiceButtonProps) {
     recognition.interimResults = false;
     recognition.lang = 'en-US';
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       const transcript = event.results[0]?.[0]?.transcript;
       if (transcript) onTranscript(transcript);
       setIsRecording(false);

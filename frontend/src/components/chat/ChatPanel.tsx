@@ -1,12 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import ChatMessageComponent from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useChatStore } from '@/stores/chatStore';
-import { streamChat, sendChat } from '@/lib/chatApi';
+import { streamChat } from '@/lib/chatApi';
 import { useLocation } from 'react-router-dom';
 
 export const ChatPanel: React.FC = () => {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
   const {
     messages,
     isOpen,
@@ -19,6 +21,7 @@ export const ChatPanel: React.FC = () => {
     addMessage,
     appendToLastMessage,
     setCurrentPage,
+    markLastMessageLoaded,
   } = useChatStore();
 
   const location = useLocation();
@@ -48,7 +51,7 @@ export const ChatPanel: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePanel]);
 
-  const handleSendMessage = async (messageText: string, files?: File[]) => {
+  const handleSendMessage = async (messageText: string) => {
     // Add user message
     addMessage({
       role: 'user',
@@ -76,12 +79,14 @@ export const ChatPanel: React.FC = () => {
         (token) => {
           appendToLastMessage(token);
         },
-        (fullResponse) => {
-          console.log('Response complete:', fullResponse);
+        (_fullResponse, newSuggestions) => {
+          markLastMessageLoaded();
+          setSuggestions(newSuggestions || []);
         },
         (error) => {
           console.error('Chat error:', error);
           appendToLastMessage(`\n\n[Error: ${error}]`);
+          markLastMessageLoaded();
         }
       );
     } catch (error) {
@@ -93,16 +98,6 @@ export const ChatPanel: React.FC = () => {
 
   return (
     <>
-      {/* Fire orb FAB trigger */}
-      {!isOpen && (
-        <button
-          onClick={togglePanel}
-          className="fixed bottom-6 right-6 z-40 w-16 h-16 rounded-full bg-gradient-to-br from-[#FF8A4C] to-[#a78bfa] shadow-2xl shadow-[#FF8A4C]/50 hover:shadow-[#FF8A4C]/75 transition-all transform hover:scale-110 flex items-center justify-center"
-        >
-          <div className="text-2xl">🔥</div>
-        </button>
-      )}
-
       {/* Chat sheet */}
       <Sheet open={isOpen} onOpenChange={togglePanel}>
         <SheetContent side="right" className="w-96 bg-[#09090b] border-l border-gray-700 p-0 flex flex-col">
@@ -154,6 +149,24 @@ export const ChatPanel: React.FC = () => {
               </>
             )}
           </div>
+
+          {/* Suggestions area */}
+          {suggestions.length > 0 && (
+            <div className="border-t border-gray-700 px-6 py-3 space-y-2">
+              <p className="text-xs text-gray-500">Try asking:</p>
+              <div className="space-y-1.5">
+                {suggestions.slice(0, 3).map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => { handleSendMessage(suggestion); setSuggestions([]); }}
+                    className="block w-full text-left text-xs text-[#FF8A4C] hover:text-[#FFB088] transition-colors py-1 px-2 rounded hover:bg-[#FF8A4C]/10"
+                  >
+                    → {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Input area */}
           <ChatInput

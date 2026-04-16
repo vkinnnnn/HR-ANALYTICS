@@ -1,43 +1,81 @@
-# Workforce IQ — Recognition Intelligence Platform
+# Workforce IQ — Executive Workforce Intelligence Platform
 
-AI-powered employee recognition analytics platform that transforms unanalyzed peer-to-peer recognition messages into executive-grade behavioral intelligence. Built as an MS Capstone project (IE 7945) at Northeastern University in partnership with **Workhuman**.
+**Bloomberg for HR data.** AI-powered workforce analytics platform that transforms employee lifecycle data into actionable intelligence for C-suite executives, VPs, and HR leaders.
 
-**Live:** [hr-analytics-f23c0.web.app](https://hr-analytics-f23c0.web.app) | **App:** [/app](https://hr-analytics-f23c0.web.app/app) | **API:** [Swagger Docs](https://hr-analytics-backend-ymez3d52nq-uc.a.run.app/docs) | **GitHub:** [vkinnnnn/HR-ANALYTICS](https://github.com/vkinnnnn/HR-ANALYTICS)
+Transform raw employee data (headcount, job history, org structure) into strategic workforce insights: turnover prediction, flight risk scoring, career progression analysis, and manager effectiveness metrics.
 
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript)
-![Three.js](https://img.shields.io/badge/Three.js-WebGL-black?style=flat-square&logo=three.js)
-![Google Cloud](https://img.shields.io/badge/Cloud%20Run-Deployed-4285F4?style=flat-square&logo=google-cloud)
-![Firebase](https://img.shields.io/badge/Firebase-Hosting-FFCA28?style=flat-square&logo=firebase)
+**Status:** Production-ready for local testing | **Backend:** Port 8119 | **Frontend:** Port 3000 | **Data:** 2,466 employees, 11,803 career moves, 1,000 recognition awards
+
+---
+
+## The Problem
+
+HR teams have **fragmented data** across multiple systems — hiring dates, org charts, job history, turnover — but **no unified intelligence layer**. Executives can't answer critical questions:
+
+- "What's our actual turnover rate by department?"
+- "Which employees are at flight risk?"
+- "Who's been stuck in the same role for 3+ years?"
+- "Are our best managers retaining their teams?"
+- "Where are promotion bottlenecks?"
+
+**Workforce IQ solves this** by unifying employee lifecycle data and computing executive-grade KPIs in real-time.
 
 ---
 
 ## What It Does
 
-Analyzes **1,000 peer-to-peer recognition awards** from Workhuman's platform using LLM taxonomy classification, NLP quality scoring, and social network analysis — plus **2,466 employee workforce records** for turnover, tenure, and career analytics.
+### Core Analytics
+- **Headcount & Composition** — Active vs departed, trends, breakdowns by department/grade/location/function
+- **Turnover & Attrition** — Rates by every dimension, danger zones, tenure-at-departure patterns
+- **Tenure Analysis** — Distribution by cohorts (0-1yr, 1-3yr, 3-5yr, 5-10yr, 10yr+), retention curves
+- **Flight Risk** — ML-predicted risk scores (LogisticRegression on tenure, role changes, manager turnover)
+- **Career Progression** — Promotion velocity, career paths, "stuck" employee detection, grade advancement trends
+- **Manager Analytics** — Span of control distribution, team retention rates, revolving-door managers
+- **Org Structure** — Hierarchy depth, department growth/shrinkage, restructuring detection
 
-### Recognition Intelligence (Primary)
-- **Behavioral Taxonomy** — 4 categories, 25 subcategories classified via LLM grounded theory
-- **Inequality Analytics** — Gini coefficient (0.463), Lorenz curves, power law distribution
-- **NLP Message Quality** — Specificity scoring, action verb detection, cliche analysis
-- **Recognition Flow** — Cross-function heatmaps, seniority direction analysis, reciprocal pairs
-- **Social Network** — PageRank, hub scores, isolated roles, cross-functional bridges
-- **Nominator Effectiveness** — Composite scoring (volume + specificity + diversity + breadth)
-- **Fairness Audit** — Specificity gaps by function and seniority level
+### Intelligence Layer
+- **AI Chatbot** — Natural language queries ("How many employees in Sales?", "Show me turnover trends")
+- **Knowledge Base** — ChromaDB semantic search over workforce metrics
+- **Memory System** — Persistent user context and saved queries
 
-### Workforce Analytics (Secondary)
-- **Turnover & Attrition** — Rates by department/grade/location, danger zones, trends
-- **Tenure Analysis** — Cohort retention, distribution bins, early-attrition detection
-- **Flight Risk** — ML-predicted scores via LogisticRegression on career signals
-- **Career Progression** — Promotion velocity, stuck employees, grade pyramid
-- **Manager Analytics** — Span of control, retention scores, revolving-door flags
+### Data Integration
+- **CSV Upload** — Drop function_wh.csv + wh_history_full.csv for instant loading
+- **Auto-Taxonomy** — LLM classification of job titles → families (Engineering, Sales, Finance, etc.)
+- **Real-time Refresh** — Pipeline triggers on data upload, rebuilds all analytics
 
-### AI Assistant (Fire Orb)
-- Persistent slide-out chat panel with voice input, file upload, mode toggles (Search/Think/Report)
-- Deep context engine: recognition taxonomy + workforce data + 16 analytics sections per query
-- Navigation agent: "show me turnover" routes to the right page
-- Follow-up suggestion pills, inline charts, proactive anomaly alerts
+---
+
+## Quick Start (5 Minutes)
+
+### 1. Backend (Port 8119)
+```bash
+cd backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8119
+```
+
+Backend auto-loads data from `wh_Dataset/` if it exists. Look for:
+```
+✓ Workforce data loaded: 2,466 employees
+✓ Career moves classified: 3,297 moves
+✓ Knowledge base built: 25+ documents
+✓ Application startup complete
+```
+
+### 2. Frontend (Port 3000)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:3000** → Click fire orb (bottom right) → Chat with your data.
+
+### 3. Test Chat
+Try:
+- "How many employees do we have?"
+- "What's our turnover rate?"
+- "Show me headcount by department"
 
 ---
 
@@ -45,143 +83,151 @@ Analyzes **1,000 peer-to-peer recognition awards** from Workhuman's platform usi
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Recharts + Three.js + framer-motion |
-| **Backend** | FastAPI + Pandas + scikit-learn + SQLAlchemy 2.0 async |
-| **AI / LLM** | OpenRouter (Nemotron 120B free) for chat, OpenAI (GPT-4o) for reports |
-| **Landing** | WebGL fluid distortion shader (Three.js + GLSL simplex noise) |
-| **Design** | Premium dark theme (#09090b), glass morphism, orange accent (#FF8A4C) |
-| **Performance** | In-memory TTL cache, GZip compression, aggregate dashboard endpoint |
-| **Hosting** | Google Cloud Run (backend) + Firebase Hosting (frontend) |
+| **Backend** | FastAPI 0.121 + Pandas + SQLAlchemy 2.0 async + SQLite |
+| **Frontend** | React 18 + TypeScript + Vite + Tailwind CSS + Recharts |
+| **AI/LLM** | LangGraph agent + ChromaDB vector DB + OpenAI/OpenRouter |
+| **Analytics** | scikit-learn (ML flight risk) + numpy + pandas |
+| **Design** | Premium dark theme, glass morphism, orange accent (#FF8A4C) |
+| **Deployment** | Docker + docker-compose (local), Cloud Run + Firebase (production) |
 
 ---
 
-## Quick Start
+## Architecture
 
-```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# Frontend
-cd frontend
-npm install
-npm run dev  # http://localhost:5173
+```
+┌─────────────────┐
+│   React 18      │
+│   (Port 3000)   │
+└────────┬────────┘
+         │ HTTP
+┌────────▼────────┐
+│   FastAPI       │
+│  (Port 8119)    │ ◄─ /api/chat, /api/workforce, /api/turnover, etc.
+└────────┬────────┘
+         │
+    ┌────┴────┬──────────┬──────────┐
+    │          │          │          │
+┌───▼──┐ ┌───▼──┐ ┌───▼──┐ ┌───▼──┐
+│ Data │ │Analytics│ChromaDB│Memory │
+│Cache │ │Engine │ (KB)  │  DB   │
+└──────┘ └──────┘ └──────┘ └──────┘
 ```
 
-Auto-loads CSV data from `wh_Dataset/` on startup. **No API keys needed** — all analytics work without them. AI features fall back to data-driven local responses.
-
-Optional `.env` for AI:
-```bash
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=your-key
-OPENAI_API_KEY=your-key
-```
+**Data Flow:**
+1. User uploads CSV → Pipeline processes → Data cached in memory
+2. Chat message received → Analytics engine queries cache → Returns structured KPIs
+3. Frontend renders response → Word-by-word animation effect
 
 ---
 
-## Pages (21)
+## Data Schema
 
-| Page | Route | Description |
-|------|-------|-------------|
-| **Landing Page** | `/` | 3D WebGL fluid shader, fire orb hero, team section, "Enter Platform" |
-| **Dashboard** | `/app` | 4 recognition KPIs, category distribution, direction donut, specificity histogram, grade pyramid |
-| **Recognition Explorer** | `/app/explorer` | Filterable/searchable table of all 1,000 awards with expandable messages |
-| **Categories** | `/app/categories` | Treemap, subcategory drill-down, category x function heatmap |
-| **Inequality** | `/app/inequality` | Gini gauge, Lorenz curve, top-10 vs bottom-50, power recipients |
-| **Message Quality** | `/app/quality` | Specificity histogram, action verb rate, cliche rate, word count stats |
-| **Recognition Flow** | `/app/flow` | Direction KPIs, cross-function heatmap, reciprocal pairs |
-| **Social Graph** | `/app/network` | Network visualization (reuses Flow) |
-| **Nominators** | `/app/nominators` | Leaderboard with composite scores, blind spots, coaching candidates |
-| **Fairness Audit** | `/app/fairness` | Specificity by function/seniority with below-avg highlighting |
-| **Data Hub** | `/app/data-hub` | Upload + pipeline stepper + reports (unified) |
-| **Workforce** | `/app/workforce` | Headcount by 8 dimensions |
-| **Turnover** | `/app/turnover` | Attrition rates, trends, danger zones |
-| **Careers** | `/app/careers` | Promotion velocity, stuck employees |
-| **Managers** | `/app/managers` | Span of control, retention scores |
-| **Settings** | `/app/settings` | LLM config, API key management, test connection |
+### Employee Master (`function_wh.csv`)
+2,466 rows, 13 columns
+- `PK_PERSON`: Unique employee ID
+- `Hire`, `Expire`: Employment dates
+- `job_title`, `grade_title`, `position_title`: Role levels
+- `department_name`, `function_title`: Org structure
+- `location_title`, `country`: Geography
+- Derived: `is_active`, `tenure_years`, `current_manager_id`
 
----
+### Career History (`wh_history_full.csv`)
+11,803 rows, 5 columns
+- `pk_user`: Employee ID
+- `job_title`: Title at this date
+- `effective_start_date`, `effective_end_date`: Date range
+- `fk_direct_manager`: Manager in this role
+- Derived: `promotion`, `lateral_transfer`, `demotion`, `restructure` (via LLM)
 
-## API Endpoints (120+)
-
-| Route | Endpoints | Purpose |
-|-------|-----------|---------|
-| `/api/recognition/*` | 12 | Summary, categories, inequality, flow, NLP quality, fairness, network, nominators, award types, explorer, top roles |
-| `/api/dashboard/*` | 1 | Aggregate endpoint — all dashboard data in single call (cached 60s) |
-| `/api/workforce/*` | 16 | Headcount by every dimension, grade pyramid |
-| `/api/turnover/*` | 11 | Attrition rates, trends, danger zones |
-| `/api/tenure/*` | 8 | Cohorts, distribution, retention curves |
-| `/api/careers/*` | 6 | Promotion velocity, stuck employees |
-| `/api/managers/*` | 6 | Span of control, retention |
-| `/api/predictions/*` | 4 | Flight risk ML scores |
-| `/api/chat/*` | 2 | AI chatbot (standard + SSE streaming) |
-| `/api/reports/*` | 3 | Executive reports, structured reports, export ZIP |
-| `/api/settings/*` | 5 | LLM config, API key management, test connection, platform status |
-| `/api/upload/*` | 3 | CSV upload, reload, status |
-| `/api/profiling/*` | 2 | Per-route latency profiling (p50/p95/p99) |
+### Recognition (`mockup_awards.csv`)
+1,000 rows, recognition messages with behavioral taxonomy
 
 ---
 
-## Data Sources
+## API Endpoints
 
-### Primary: Recognition Awards (Workhuman)
-| File | Rows | Description |
-|------|------|-------------|
-| `annotated_results.csv` | 1,000 | Recognition messages + LLM behavioral taxonomy (4 categories, 25 subcategories) |
-| `mockup_awards.csv` | 1,000 | Raw messages with job titles |
+| Category | Count | Examples |
+|----------|-------|----------|
+| **Chat** | 1 | `POST /api/chat` — Natural language queries |
+| **Workforce** | 8+ | Headcount by dept/grade/location/function |
+| **Turnover** | 6+ | Attrition rates, trends, danger zones |
+| **Tenure** | 5+ | Cohorts, distribution, retention |
+| **Careers** | 5+ | Promotion velocity, stuck employees |
+| **Managers** | 5+ | Span of control, retention, revolving doors |
+| **Predictions** | 3+ | Flight risk scores, model metadata |
+| **Admin** | 6+ | Upload, reload, settings, health |
 
-**Key stats:** 314 unique recipient roles, Gini 0.463, avg specificity 0.254, 42.9% cross-function, 69.6% zero action verbs
+**Base URL:** `http://localhost:8119/api`
 
-### Secondary: Workforce Lifecycle
-| File | Rows | Description |
-|------|------|-------------|
-| `function_wh.csv` | 2,466 | Employee master — hire/expire, job title, grade, department, country |
-| `wh_history_full.csv` | 11,803 | Job change history with manager hierarchy |
-
-**Key stats:** 1,110 active (45%), 55% turnover, 3.9yr avg tenure, 222 managers
+Full API docs: Start backend, then visit `http://localhost:8119/docs`
 
 ---
 
 ## Performance
 
-Profiled with custom middleware (p50/p95 over 20 iterations):
-
-| Endpoint | Before | After (cached) | Improvement |
-|----------|--------|-----------------|-------------|
-| `/api/recognition/nominators` | 64.6ms | 1.8ms | 36x |
-| `/api/recognition/categories` | 8.6ms | 0.9ms | 10x |
-| `/api/dashboard/overview` | N/A (6 calls ~120ms) | 1.1ms | Single call |
-
-**Optimizations:** TTL cache (120s, 100 entries), GZip compression (>1KB), aggregate endpoint, version-based cache invalidation on data reload.
+In-memory caching + GZip compression:
+- Analytics queries: **<10ms** (cached)
+- Chat responses: **<500ms** (analytics + formatting)
+- Frontend load: **<2s** (gzipped)
 
 ---
 
-## Deployment
+## Deployment (Production)
 
+### Docker
 ```bash
-bash deploy.sh  # Deploys backend (Cloud Run) + frontend (Firebase)
+docker-compose up
 ```
 
-| Component | Platform | URL |
-|-----------|----------|-----|
-| Frontend | Firebase Hosting | [hr-analytics-f23c0.web.app](https://hr-analytics-f23c0.web.app) |
-| Backend | Cloud Run (us-central1) | [hr-analytics-backend-ymez3d52nq-uc.a.run.app](https://hr-analytics-backend-ymez3d52nq-uc.a.run.app) |
+Starts:
+- Backend on `http://localhost:8119`
+- Frontend on `http://localhost:3000`
+
+### Cloud (AWS/Google Cloud/Azure)
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for:
+- Cloud Run setup (backend)
+- Firebase/Netlify (frontend)
+- Database migration (PostgreSQL)
+- Environment configuration
+
+---
+
+## Docs
+
+| Document | Purpose |
+|----------|---------|
+| [QUICKSTART.md](./QUICKSTART.md) | 30-second and 5-minute setup guides |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment instructions |
+| [RUN_ON_8119.md](./RUN_ON_8119.md) | Local testing on port 8119 |
+| [CLAUDE.md](./CLAUDE.md) | Project scope and constraints |
+| [docs/design-system.md](./docs/design-system.md) | UI/UX guidelines |
 
 ---
 
 ## Team
 
-| Name | Role | LinkedIn |
-|------|------|----------|
-| **Chirag Verma** | Project Lead, Full-Stack | [linkedin.com/in/vkin](https://linkedin.com/in/vkin/) |
-| **Arav Pandey** | Data Science, ML | [linkedin.com/in/aravpandey](https://linkedin.com/in/aravpandey/) |
-| **Rohan Reddy Kolla** | Backend, Analytics | [linkedin.com/in/rohan-reddy-kolla](https://linkedin.com/in/rohan-reddy-kolla/) |
+**Chirag Verma** — Full-stack, product vision
+- LinkedIn: [linkedin.com/in/vkin](https://linkedin.com/in/vkin/)
+- Email: verma.ch@northeastern.edu
 
-**Northeastern University** — MS Capstone (IE 7945) — Spring 2026 — in partnership with **Workhuman**
+**Kashyap Akula** — Design & product
+- LinkedIn: [linkedin.com/in/kashyap-akula-804937210](https://linkedin.com/in/kashyap-akula-804937210/)
+
+Built as **MS Capstone (IE 7945)** at Northeastern University, Spring 2026.
 
 ---
 
 ## License
 
-Private repository.
+Proprietary. Contact for licensing inquiries.
+
+---
+
+## Next Steps
+
+1. **Explore the data** — Use the chat to ask questions about your workforce
+2. **Build analytics pages** — Workforce Composition, Turnover Analysis, Career Progression
+3. **Connect your data** — Upload real employee CSVs
+4. **Deploy to production** — Follow DEPLOYMENT.md
+
+Questions? Check [QUICKSTART.md](./QUICKSTART.md) or [DEPLOYMENT.md](./DEPLOYMENT.md).

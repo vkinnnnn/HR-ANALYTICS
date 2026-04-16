@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Copy, Download, ExternalLink, Volume2 } from 'lucide-react';
+import { Copy, Download, Volume2 } from 'lucide-react';
 import type { ChatMessage } from '@/stores/chatStore';
 
 interface ChatMessageProps {
@@ -35,7 +35,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({
         <div className="max-w-xs bg-gradient-to-br from-[#FF8A4C] to-[#e85d04] text-white rounded-2xl px-4 py-3 shadow-md">
           <p className="text-sm break-words">{message.content}</p>
           <span className="text-xs opacity-70 mt-1 block">
-            {message.timestamp.toLocaleTimeString()}
+            {new Date(message.timestamp).toLocaleTimeString()}
           </span>
         </div>
       </div>

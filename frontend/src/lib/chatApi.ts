@@ -22,7 +22,7 @@ export interface ChatResponse {
 export async function streamChat(
   request: ChatRequest,
   onToken: (token: string) => void,
-  onComplete: (response: string) => void,
+  onComplete: (response: string, suggestions?: string[]) => void,
   onError: (error: string) => void
 ): Promise<void> {
   try {
@@ -56,7 +56,7 @@ export async function streamChat(
       await new Promise(resolve => setTimeout(resolve, 15));
     }
 
-    onComplete(text);
+    onComplete(text, data.suggestions);
   } catch (error) {
     console.error('Chat error:', error);
     onError(error instanceof Error ? error.message : 'Unknown error');
