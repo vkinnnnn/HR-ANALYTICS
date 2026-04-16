@@ -22,6 +22,7 @@ from .routers import (
     ws,
     brain_router,
     chat_stream,
+    simple_chat,
 )
 from .routers import dashboard
 
@@ -132,6 +133,7 @@ app.include_router(pipeline_router.router, prefix="/api/pipeline", tags=["Pipeli
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard Aggregate"])
 app.include_router(brain_router.router, prefix="/api/brain", tags=["Brain AI"])
 app.include_router(chat_stream.router, prefix="/api/chat", tags=["Chat Streaming"])
+app.include_router(simple_chat.router, prefix="/api", tags=["Chat"])
 app.include_router(profiling_router, prefix="/api", tags=["Profiling"])
 app.include_router(ws.router, tags=["WebSocket"])
 

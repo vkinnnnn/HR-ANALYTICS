@@ -1,6 +1,5 @@
 /**
- * Chat API client with SSE streaming support.
- * Handles real-time token-by-token response streaming from backend.
+ * Simple, reliable chat API client.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8119/api';
@@ -15,12 +14,10 @@ export interface ChatRequest {
 export interface ChatResponse {
   response: string;
   suggestions?: string[];
-  data?: Record<string, any>;
 }
 
 /**
- * Send chat message and stream response tokens.
- * Uses the non-streaming endpoint and simulates streaming by character.
+ * Send chat message and get response (simple, no streaming).
  */
 export async function streamChat(
   request: ChatRequest,
@@ -29,44 +26,48 @@ export async function streamChat(
   onError: (error: string) => void
 ): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE}/brain/chat`, {
+    console.log('Sending chat request:', request);
+
+    const response = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
 
+    console.log('Chat response status:', response.status);
+
     if (!response.ok) {
       throw new Error(`Chat error: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data: ChatResponse = await response.json();
+    console.log('Chat data:', data);
 
-    if (data.error) {
-      throw new Error(data.error);
+    if (!data.response) {
+      throw new Error('No response from server');
     }
 
-    // Simulate streaming by breaking response into chunks
-    const fullText = data.response || '';
+    // Simulate streaming by breaking into chunks
+    const text = data.response;
+    const words = text.split(' ');
 
-    // Stream by words (faster, more readable)
-    const words = fullText.split(' ');
     for (const word of words) {
       onToken(word + ' ');
-      // Small delay between words for visual effect
-      await new Promise(resolve => setTimeout(resolve, 20));
+      await new Promise(resolve => setTimeout(resolve, 15));
     }
 
-    onComplete(fullText);
+    onComplete(text);
   } catch (error) {
+    console.error('Chat error:', error);
     onError(error instanceof Error ? error.message : 'Unknown error');
   }
 }
 
 /**
- * Simple (non-streaming) chat request.
+ * Send chat message (non-streaming fallback).
  */
 export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
-  const response = await fetch(`${API_BASE}/brain/chat`, {
+  const response = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
